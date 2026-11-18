@@ -21,7 +21,7 @@ html.rot body{right:auto;bottom:auto;width:100vh;height:100vw;transform-origin:0
 #cv{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
 #touch{position:absolute;inset:0}
 #vig{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(90,0,0,.55) 100%)}
-.stick{position:absolute;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:2px solid rgba(217,210,192,.16);pointer-events:none}
+.stick{position:absolute;width:168px;height:168px;margin:-84px 0 0 -84px;border-radius:50%;border:2px solid rgba(217,210,192,.16);pointer-events:none}
 .stick i{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:rgba(217,210,192,.14)}
 .hint{position:absolute;bottom:calc(var(--sb) + 8px);font-size:18px;letter-spacing:.2em;color:var(--dim);pointer-events:none;transition:opacity 1.5s}
 #hintL{left:calc(var(--sl) + 40px)}#hintR{right:calc(var(--sr) + 110px)}
@@ -366,9 +366,9 @@ function bakeGround() {
 
 // ---------------- state ----------------
 const P = { x: 0, y: 6, aim: -Math.PI / 2, aimT: -Math.PI / 2, vx: 0, vy: 0, stam: 1, mode: 'still', noise: 0, stepT: 0, moving: false, inBush: false, face: -Math.PI / 2 };
-const bat = { c: 1, r: 1, dead: false, force: 0 };
+const bat = { c: 1, r: 1, dead: false, force: 0, nextFl: 40, flT: 0, plant: false };
 const beam = { out: 1, hw: 0.52, R: 10.5, tr: 1, tg: 0.92, tb: 0.74, cosO: 0 };
-const CR = { x: 1e6, y: 1e6, a: 0, st: 'away', t: 0, v: 0, eyes: false, A: 0, unlit: 0, prev: '', lx: 0, ly: 0, tx: 0, ty: 0, dur: 0, rad: 14, dir: 1, nextSnd: 0, nextBr: 0, lit: 0, lost: 0, fire: null, hunting: false, seen: 0, stung: false, eyeP: null };
+const CR = { x: 1e6, y: 1e6, a: 0, st: 'away', t: 0, v: 0, eyes: false, A: 0, unlit: 0, prev: '', lx: 0, ly: 0, tx: 0, ty: 0, dur: 0, rad: 14, dir: 1, nextSnd: 0, nextBr: 0, lit: 0, lost: 0, fire: null, hunting: false, seen: 0, stung: false, eyeP: null, ph: 0, mv: 0, lastX: null, lastY: null, seed: null };
 const DEER = { on: false, x: 0, y: 0, a: 0, st: 'watch', t: 0, litT: 0, stepT: 0 };
 const D = { t: 0, next: 30, bold: 0, sightings: 0, hunts: 0, bluffs: 0, heat: 0, amb: 20, mute: 0 };
 let lightOn = true, narrow = false, adapt = 0, fear = 0.05, shake = 0, cam = { x: 0, y: 2 }, tNow = 0;
@@ -424,7 +424,12 @@ function tn(dest, t0, dur, f, type, vol, f2 = 0, att = 0.005) {
 }
 const snd = {
   ok: () => AC && AC.state === 'running',
-  step(surface, m) { if (!snd.ok()) return; const t = AC.currentTime, v = m === 'run' ? 0.2 : m === 'walk' ? 0.1 : 0.04; const b = bus(null, null, 1); if (surface === 'dirt') nz(b, t, 0.06, 700, 0.9, v * 0.8); else nz(b, t, 0.07, 2300 + Math.random() * 900, 0.7, v); },
+  step(surface, m) { // never the same twice: soft scuffs on dirt, a few small crackles in leaf litter, now and then a twig
+    if (!snd.ok()) return; const r = Math.random, t = AC.currentTime + r() * 0.04, base = m === 'run' ? 0.1 : m === 'walk' ? 0.045 : 0.018, v = base * (0.55 + r() * 0.8), b = bus(null, null, 1);
+    if (surface === 'dirt') { nz(b, t, 0.04 + r() * 0.05, 380 + r() * 420, 0.6, v * 0.9, 'lowpass', 0, 0.01); if (r() < 0.3) nz(b, t + 0.03, 0.02, 1800 + r() * 1500, 0.7, v * 0.35); }
+    else { const n = 1 + (r() * 3 | 0); for (let i = 0; i < n; i++) nz(b, t + i * (0.012 + r() * 0.035), 0.015 + r() * 0.03, 1500 + r() * 3000, 0.7 + r(), v * (0.4 + r() * 0.6)); nz(b, t, 0.05, 500 + r() * 300, 0.6, v * 0.5, 'lowpass', 0, 0.01); }
+    if (surface !== 'dirt' && r() < (m === 'run' ? 0.22 : m === 'walk' ? 0.08 : 0.03)) { nz(b, t + 0.02, 0.016, 2800 + r() * 900, 0.6, v * 2.2, 'highpass'); tn(b, t + 0.02, 0.025, 700 + r() * 300, 'square', v * 0.25, 220); }
+  },
   rustle(x, y, v = 0.5) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1); nz(b, t, 0.25, 2800, 0.5, v, 'bandpass', 0, 0.06); nz(b, t + 0.08 + Math.random() * 0.1, 0.18, 3600, 0.6, v * 0.6, 'bandpass', 0, 0.04); ripple(x, y, 0.5); },
   twig(x, y, v = 1) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, v); nz(b, t, 0.025, 2600, 0.6, 0.9, 'highpass'); nz(b, t + 0.045, 0.02, 3000, 0.6, 0.6, 'highpass'); tn(b, t, 0.035, 900, 'square', 0.08, 260); ripple(x, y, 1); },
   breath(x, y, v = 0.35) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1); const s = AC.createBufferSource(); s.buffer = noiseBuf; const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(800, t); f.frequency.linearRampToValueAtTime(380, t + 1.3); const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.55); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4); s.connect(f).connect(g).connect(b); s.start(t, Math.random()); s.stop(t + 1.5); },
@@ -479,7 +484,7 @@ const stick = { move: null, aim: null };
 const stL = $('stL'), stR = $('stR');
 const touchEl = $('touch');
 let mouseAim = null, lastTap = 0;
-const STICK_R = 52;
+const STICK_R = 80;
 function placeStick(el, x, y) { el.style.left = x + 'px'; el.style.top = y + 'px'; }
 touchEl.addEventListener('pointerdown', e => {
   if (mode === 'talk') { nextLine(); return; }
@@ -565,7 +570,8 @@ function updatePlayer(dt) {
   const kx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0), ky = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
   if (kx || ky) { const L = Math.hypot(kx, ky); mx = kx / L; my = ky / L; m = keys.ShiftLeft || keys.ShiftRight ? 1 : keys.KeyC || keys.ControlLeft || keys.AltLeft ? 0.4 : 0.75; }
   let sp = 0, md = 'still';
-  if (m > 0.1) { if (m < 0.55) { sp = 0.95; md = 'sneak'; } else if (m < 0.93 || P.stam <= 0.02) { sp = 1.85; md = 'walk'; } else { sp = 4.0; md = 'run'; } }
+  // creep up to ~half the throw, walk most of the rest, run only with the stick pushed all the way out
+  if (m > 0.12) { if (m < 0.5) { sp = lerp(0.6, 1.0, (m - 0.12) / 0.38); md = 'sneak'; } else if (m < 0.96 || P.stam <= 0.02) { sp = lerp(1.45, 1.9, clamp((m - 0.5) / 0.4, 0, 1)); md = 'walk'; } else { sp = 4.0; md = 'run'; } }
   P.inBush = inBush(P.x, P.y);
   if (P.inBush) sp *= 0.55;
   if (md === 'run') P.stam = Math.max(0, P.stam - dt / 7); else P.stam = Math.min(1, P.stam + dt / (md === 'still' ? 8 : 12));
@@ -578,7 +584,7 @@ function updatePlayer(dt) {
   P.noise = { still: 0, sneak: 0.25, walk: 0.6, run: 1 }[P.mode] + (P.inBush && P.moving ? 0.35 : 0);
   if (P.moving) {
     P.stepT -= dt * spd / 0.75;
-    if (P.stepT <= 0) { P.stepT = 1; snd.step(surfaceAt(P.x, P.y), P.mode); if (P.inBush) snd.rustle(P.x + 0.3, P.y, 0.25); }
+    if (P.stepT <= 0) { P.stepT = 0.75 + R() * 0.5; snd.step(surfaceAt(P.x, P.y), P.mode); if (P.inBush) snd.rustle(P.x + 0.3, P.y, 0.25); }
   }
   // aim: right stick, mouse, or drift toward walking direction
   let aimInput = false;
@@ -591,14 +597,23 @@ function worldToCss(x, y) { const s = VW() / W; return { x: ((x - cam.x) * PPM +
 
 function updateBattery(dt) {
   const on = lightOn && !bat.dead;
-  if (on) { bat.c -= dt * (narrow ? 1 / 20 : 1 / 52); bat.r = Math.max(0.45, bat.r - dt * (narrow ? 0.0008 : 0.0004)); }
+  if (on) { bat.c -= dt * (narrow ? 1 / 28 : 1 / 75); bat.r = Math.max(0.45, bat.r - dt * (narrow ? 0.0008 : 0.0004)); }
   else bat.c += (bat.r - bat.c) * dt * 0.24;
   if (bat.c <= 0) { bat.c = 0; if (!bat.dead) { bat.dead = true; snd.fizzle(); syncBtns(); } }
   if (bat.dead && bat.c > 0.3 * bat.r) { bat.dead = false; if (lightOn) snd.sputter(); syncBtns(); }
   const base = sstep(0, 0.5, bat.c);
   let fl = 1;
-  if (bat.c < 0.3) { const th = lerp(0.97, 0.45, (0.3 - bat.c) / 0.3); fl = vnoise(tNow * 16, 7.3) > th ? 0.12 : 1; if (fl < 1 && R() < 0.02) snd.click(false); }
-  if (bat.force > 0) { bat.force -= dt; fl = R() < 0.18 ? 0.5 : 0; }
+  // the light stutters on its own clock: roughly once a minute, at a random moment
+  if (on && mode === 'play') {
+    if (bat.flT <= 0 && runTime > bat.nextFl) {
+      bat.flT = 0.6 + R() * 0.9; bat.nextFl = runTime + 40 + R() * 45; snd.click(false);
+      bat.plant = CR.st === 'follow' && crDist() < 22 && R() < 0.35; // sometimes, when it comes back, it's standing in the beam
+    }
+    if (bat.flT > 0) {
+      bat.flT -= dt; fl = vnoise(tNow * 22, 3.1) > 0.45 ? 0.1 : 1;
+      if (bat.flT <= 0 && bat.plant) { bat.plant = false; plantInBeam(); }
+    }
+  }
   const shakeR = P.mode === 'run' ? 1 : 0;
   beam.out = on ? base * fl : 0;
   const warm = 1 - base;
@@ -607,7 +622,7 @@ function updateBattery(dt) {
   beam.R = (narrow ? 22 : 13) * (0.6 + 0.4 * base);
   beam.cosO = Math.cos(Math.min(Math.PI, beam.hw * 1.4));
   beam.aim = P.aim + (shakeR ? Math.sin(tNow * 13) * 0.05 + (vnoise(tNow * 9, 2) - 0.5) * 0.12 : (vnoise(tNow * 0.6, 5) - 0.5) * 0.012);
-  adapt = beam.out > 0.05 ? Math.max(0, adapt - dt * 2.5) : Math.min(1, adapt + dt / 6);
+  adapt = beam.out > 0.05 ? Math.max(0, adapt - dt * 6) : Math.min(1, adapt + dt * 4); // night vision follows the switch
 }
 function beamAt(x, y, ext = 1) {
   if (beam.out <= 0.001) return 0;
@@ -683,6 +698,11 @@ function startHunt(scream = true) {
   if (scream) { snd.shriek(CR.x, CR.y); D.hunts++; shake = 0.6; }
   fear = 1;
 }
+function plantInBeam() {
+  const dd = 6 + R() * 2.5, a = beam.aim + (R() - 0.5) * beam.hw;
+  const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd);
+  if (p) { CR.x = p[0]; CR.y = p[1]; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); CR.eyes = true; setCr('stand'); }
+}
 function retreat() { setCr('retreat'); CR.eyes = false; snd.rustle(CR.x, CR.y, 0.5); }
 function bluff() { setCr('rear'); CR.eyes = true; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); snd.shriek(CR.x, CR.y); snd.caught(); shake = 1.4; fear = 1; D.bluffs++; }
 // what it can tell about you right now
@@ -748,14 +768,7 @@ function updateCreature(dt) {
       moveTo(CR, P.x + Math.cos(na) * CR.rad, P.y + Math.sin(na) * CR.rad, 2.4, dt);
       if (CR.t > CR.nextSnd) { if (R() < 0.6) snd.twig(CR.x, CR.y, 0.8); else snd.rustle(CR.x, CR.y, 0.45); CR.nextSnd = CR.t + 2.5 + R() * 3; }
       if (CR.t > CR.dur) {
-        if (beam.out > 0.3 && R() < 0.5) {
-          // the light stutters, and when it comes back it is closer, right in the beam
-          bat.force = 0.85;
-          const dd = 6 + R() * 2.5, a = beam.aim + (R() - 0.5) * beam.hw;
-          const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd);
-          if (p) { CR.x = p[0]; CR.y = p[1]; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); CR.eyes = true; setCr('stand'); }
-          else goAway();
-        } else goAway();
+        goAway();
       }
       break;
     }
@@ -1098,12 +1111,16 @@ function fillPoly(pts, col) {
 // the creature: tall, dark, long arms, low antlers that spread out sideways (concept sheet v6, antlers D)
 const ANTLER = { beam: [[0, 0], [0.16, 0.05], [0.34, 0.08], [0.5, 0.17]], tines: [[0.38, 75, 0.15], [0.62, 85, 0.18], [0.86, 60, 0.12], [0.12, -25, 0.07]] };
 function seg(T, a, b, wm, col, SW) { const A = T(a[0], a[1]), B = T(b[0], b[1]), r = wm * SW * 0.5; line(A[0], A[1], B[0], B[1], col, r > 0.6 ? r : 0); }
-function drawUpright(T, pose, SW, mouthOpen) {
+function drawUpright(T0, pose, SW, mouthOpen) {
   const st = pose === 'stoop', rear = pose === 'rear';
+  // motion: a stride cycle from distance travelled, plus slow breathing and sway when it stands
+  const ph = CR.ph || 0, mv = CR.mv || 0, tt = tNow + (CR.seed || 0);
+  const bob = Math.abs(Math.sin(ph)) * 0.05 * mv + Math.sin(tt * 1.6) * 0.012 * (1 - mv), sway = Math.sin(ph) * 0.05 * mv + Math.sin(tt * 0.45) * 0.025 * (1 - mv);
+  const T = (x, h) => h > 0.95 ? T0(x + sway * (h / 2), h + bob) : T0(x, h);
   const hip = st ? 1.0 : 1.2, sh = st ? 1.62 : 1.98, shW = 0.36, hy = st ? 1.6 : 2.05, H0 = PAL.hide[0];
-  for (const sg of [-1, 1]) { // legs, heel raised
-    const kx = sg * (st ? 0.24 : 0.17);
-    seg(T, [sg * 0.1, hip], [kx, hip / 2], 0.14, H0, SW); seg(T, [kx, hip / 2], [sg * 0.13, 0.2], 0.1, H0, SW); seg(T, [sg * 0.13, 0.2], [sg * 0.16, 0], 0.06, H0, SW);
+  for (const sg of [-1, 1]) { // legs, heel raised; the swinging leg lifts
+    const lift = Math.max(0, Math.sin(ph + (sg > 0 ? 0 : Math.PI))) * 0.22 * mv, kx = sg * (st ? 0.24 : 0.17) + sg * lift * 0.3;
+    seg(T, [sg * 0.1, hip], [kx, hip / 2 + lift * 0.7], 0.14, H0, SW); seg(T, [kx, hip / 2 + lift * 0.7], [sg * 0.13, 0.2 + lift], 0.1, H0, SW); seg(T, [sg * 0.13, 0.2 + lift], [sg * 0.16, lift * 0.8], 0.06, H0, SW);
   }
   const tor = [[-0.12, hip - 0.04], [0.12, hip - 0.04], [0.15, hip + 0.13], [0.11, (hip + sh) / 2 - 0.08], [0.2, sh - 0.32], [shW, sh - 0.12], [shW * 0.85, sh + 0.06], [0.16, sh + 0.13],
     [-0.16, sh + 0.13], [-shW * 0.85, sh + 0.06], [-shW, sh - 0.12], [-0.2, sh - 0.32], [-0.11, (hip + sh) / 2 - 0.08], [-0.15, hip + 0.13]];
@@ -1113,7 +1130,8 @@ function drawUpright(T, pose, SW, mouthOpen) {
   for (const sg of [-1, 1]) { // arms that hang past the knees (or reach up, reared)
     const s0 = [sg * (shW - 0.02), sh - 0.07];
     const el = rear ? [sg * (shW + 0.24), sh + 0.15] : [sg * (shW + 0.14), sh - (st ? 0.55 : 0.7)];
-    const wr = rear ? [sg * (shW + 0.36), sh + 0.62] : [sg * (shW + (st ? 0.17 : 0.07)), st ? 0.3 : 0.52];
+    const swing = rear ? Math.sin(tt * 9 + sg) * 0.06 : Math.sin(ph + (sg > 0 ? Math.PI : 0)) * 0.16 * mv + Math.sin(tt * 0.8 + sg * 1.3) * 0.03 * (1 - mv);
+    const wr = rear ? [sg * (shW + 0.36) + swing, sh + 0.62] : [sg * (shW + (st ? 0.17 : 0.07)) + swing * 0.3, (st ? 0.3 : 0.52) + swing];
     seg(T, s0, el, 0.13, H0, SW); seg(T, el, wr, 0.08, H0, SW);
     const dir = rear ? 1 : -1;
     for (let f = -1; f <= 1; f++) { const tip = [wr[0] + f * 0.07 + sg * 0.03, wr[1] + dir * 0.24], mid = [wr[0] + f * 0.045, wr[1] + dir * 0.14]; seg(T, wr, mid, 0.03, PAL.hide[1], SW); seg(T, mid, tip, 0.02, PAL.claw, SW); }
@@ -1145,11 +1163,12 @@ function drawFours(sx, sy) {
   const a = CR.a, fx = Math.cos(a), fy = Math.sin(a), px = -fy, py = fx, S = 11, [lx, ly] = leanV(sx, sy, 1), L = Math.hypot(lx, ly) || 1, ux = lx / L * 3.2, uy = ly / L * 3.2;
   const Q = (f, s, h) => [sx + (fx * f + px * s) * S + ux * h, sy + (fy * f + py * s) * S + uy * h];
   const H0 = PAL.hide[0], ln = (A, B, r, col) => line(A[0], A[1], B[0], B[1], col, r);
-  for (const sg of [-1, 1]) ln(Q(-0.45, sg * 0.15, 0.5), Q(-0.7, sg * 0.38, 0), 0.7, H0);
+  const ph = CR.ph || 0, mv = CR.mv || 0, g = Math.sin(ph) * 0.28 * mv, lift = Math.abs(Math.cos(ph)) * 0.25 * mv; // a loping gallop: front and back pairs reach alternately
+  for (const sg of [-1, 1]) ln(Q(-0.45, sg * 0.15, 0.5 + lift), Q(-0.7 - g, sg * 0.38, 0), 0.7, H0);
   const body = []; for (let i = 0; i < 14; i++) { const t = i / 14 * TAU, f = Math.cos(t) * 0.62 - 0.05, s = Math.sin(t) * (Math.cos(t) > 0 ? 0.27 : 0.2); body.push(Q(f, s, 0.6 + Math.cos(t) * 0.2)); }
   fillPoly(body, H0);
   ln(Q(-0.5, 0, 0.5), Q(0.35, 0, 0.85), 0, PAL.hide[2]);
-  for (const sg of [-1, 1]) { const sh = Q(0.3, sg * 0.2, 0.75), el = Q(0.62, sg * 0.42, 0.4), wr = Q(0.98, sg * 0.42, 0); ln(sh, el, 0.8, H0); ln(el, wr, 0.6, H0); for (let k = -1; k <= 1; k++) { const t = Q(1.18, sg * 0.42 + k * 0.08, 0); ln(wr, t, 0, PAL.claw); } }
+  for (const sg of [-1, 1]) { const sh = Q(0.3, sg * 0.2, 0.75 + lift), el = Q(0.62 + g * 0.5, sg * 0.42, 0.4 + lift), wr = Q(0.98 + g, sg * 0.42, Math.max(0, -g));  ln(sh, el, 0.8, H0); ln(el, wr, 0.6, H0); for (let k = -1; k <= 1; k++) { const t = Q(1.18, sg * 0.42 + k * 0.08, 0); ln(wr, t, 0, PAL.claw); } }
   const hc = Q(0.66, 0, 0.55); disc(hc[0], hc[1], 1.6, H0); ln(Q(0.66, -0.12, 0.5), Q(0.66, 0.12, 0.5), 0, PAL.tooth[0]);
   for (const sg of [-1, 1]) {
     const pts = ANTLER.beam.map(q => Q(0.6 - q[1] * 0.6, sg * (0.08 + q[0] * 1.4), 0.7 + q[1] * 1.5));
@@ -1158,9 +1177,11 @@ function drawFours(sx, sy) {
   }
   CR.eyeP = [Q(0.78, -0.17, 0.6), Q(0.78, 0.17, 0.6)];
 }
-function drawCreature() {
+function drawCreature(dt = 1 / 30) {
   CR.eyeP = null;
-  if (CR.st === 'away') return;
+  if (CR.st === 'away') { CR.lastX = null; return; }
+  if (CR.lastX != null && dt > 0) { const m = Math.hypot(CR.x - CR.lastX, CR.y - CR.lastY); if (m < 1) { CR.ph = (CR.ph || 0) + m * (CR.st === 'hunt' ? 3.2 : 4.2); CR.mv += (clamp(m / dt / 1.6, 0, 1) - (CR.mv || 0)) * Math.min(1, dt * 8); } }
+  CR.lastX = CR.x; CR.lastY = CR.y; if (CR.seed == null) CR.seed = R() * 100;
   const [sx, sy] = s2(CR.x, CR.y); if (!onScr(sx, sy, 40)) return;
   const dying = mode === 'dying', pose = dying || CR.st === 'rear' ? 'rear' : CR.st === 'hunt' ? 'fours' : STOOP[CR.st] ? 'stoop' : 'up';
   OV = [CR.x, CR.y];
@@ -1215,10 +1236,13 @@ function drawProps() {
 const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
 const LEV = 6;
 function render(dt) {
-  // camera leans toward where the light points
-  const lead = lightOn ? (narrow ? 7 : 5) : 1.2;
-  const tx = P.x + Math.cos(P.aim) * lead, ty = P.y + Math.sin(P.aim) * lead;
-  const kk = 1 - Math.exp(-dt * 1.8);
+  // camera leads where you're walking; stand still and it swings round to where the light points
+  const spd = Math.hypot(P.vx, P.vy), walkLead = clamp(spd / 1.9, 0, 1) * (P.mode === 'run' ? 5.5 : 4.5);
+  const look = lightOn ? (narrow ? 7 : 5) : 1.5;
+  let tx, ty;
+  if (spd > 0.3) { tx = P.x + Math.cos(P.face) * walkLead; ty = P.y + Math.sin(P.face) * walkLead; }
+  else { tx = P.x + Math.cos(P.aim) * look; ty = P.y + Math.sin(P.aim) * look; }
+  const kk = 1 - Math.exp(-dt * 2.2);
   cam.x += (tx - cam.x) * kk; cam.y += (ty - cam.y) * kk;
   shake = Math.max(0, shake - dt * 2);
   camX = Math.round((cam.x + (shake > 0 ? (R() - 0.5) * shake * 0.5 : 0)) * PPM) / PPM; camY = Math.round((cam.y + (shake > 0 ? (R() - 0.5) * shake * 0.5 : 0)) * PPM) / PPM;
@@ -1231,7 +1255,7 @@ function render(dt) {
   for (const o of vis) if (o.decoy) drawDecoy(o);
   drawProps();
   drawDeer();
-  drawCreature();
+  drawCreature(dt);
   if (mode !== 'title') drawPlayer();
   const tv = []; near(solidG, camX, camY, Math.max(hwM, hhM) + 4, o => { if (o.t === 'tree') tv.push(o); });
   tv.sort((a, b) => ((a.x - camX) ** 2 + (a.y - camY) ** 2) - ((b.x - camX) ** 2 + (b.y - camY) ** 2));
@@ -1294,7 +1318,7 @@ function shade() {
         }
       }
       let m = lr > lg ? lr : lg; if (lb > m) m = lb;
-      const nl = nv > 0 ? nv * (0.22 + mn * 3.2) * (LF[i] === 2 ? 0.4 : 1) : 0;
+      const nl = nv > 0 ? nv * (0.11 + mn * 1.6) * (LF[i] === 2 ? 0.4 : 1) : 0;
       if (m <= 0.0005 && nl <= 0.004) { out32[i] = BLACK; continue; }
       const cr = col & 255, cg = (col >> 8) & 255, cb = (col >> 16) & 255;
       let r = 0, g = 0, b = 0;
@@ -1394,7 +1418,7 @@ function howto() { const back = mode; showCard(`<h2>How to play</h2>${HOWTO}<p c
 function resetRun() {
   runSeed = (Math.random() * 1e9) | 0; buildWorld(runSeed);
   Object.assign(P, { x: CAR.x - 1.7, y: CAR.y - 0.4, aim: -Math.PI / 2, aimT: -Math.PI / 2, vx: 0, vy: 0, stam: 1, mode: 'still', face: -Math.PI / 2 });
-  Object.assign(bat, { c: 1, r: 1, dead: false, force: 0 });
+  Object.assign(bat, { c: 1, r: 1, dead: false, force: 0, nextFl: 35 + R() * 30, flT: 0, plant: false });
   Object.assign(D, { t: 0, next: 30, bold: 0, sightings: 0, hunts: 0, bluffs: 0, heat: 0, amb: 12, mute: 0 });
   Object.assign(S, { phase: 'road', follow: false, teased: false, deer: false, posed: false, talked: false });
   CR.A = 0; CR.st = 'away'; CR.x = CR.y = 1e6; CR.eyeP = null; DEER.on = false; ripples = []; talk = null; talkEl.hidden = true;
