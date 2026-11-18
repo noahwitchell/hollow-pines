@@ -49,6 +49,11 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
 .box button.primary{background:var(--beam);color:#1a1608;border-color:var(--beam)}
 .stats{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;font-size:19px;color:var(--dim);font-variant-numeric:tabular-nums}
 .stats b{display:block;font-size:30px;color:var(--ink);font-weight:400}
+#talk{position:absolute;left:50%;bottom:calc(var(--sb) + 10px);transform:translateX(-50%);width:min(620px,calc(100% - var(--sl) - var(--sr)));box-sizing:border-box;padding:10px 16px 12px;background:rgba(4,5,8,.86);border:2px solid var(--line);z-index:15;cursor:pointer}
+#talk b{display:block;font-weight:400;font-size:17px;letter-spacing:.14em;color:var(--ember);text-transform:uppercase}
+#talk.you b{color:var(--dim)}
+#talk p{margin:2px 0 0;font-size:22px;line-height:1.15;color:var(--ink)}
+#talk span{position:absolute;right:12px;bottom:6px;font-size:15px;color:var(--dim);letter-spacing:.1em}
 @media (prefers-reduced-motion: reduce){.hint{transition:none}}
 </style>
 <div id="app">
@@ -59,6 +64,7 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   <div class="stick" id="stR" hidden><i></i></div>
   <div class="hint" id="hintL" hidden>WALK</div>
   <div class="hint" id="hintR" hidden>AIM</div>
+  <div id="talk" hidden><b id="talkWho"></b><p id="talkText"></p><span>TAP</span></div>
   <button id="pauseBtn" aria-label="Pause" hidden>II</button>
   <div id="rbtns" hidden>
     <button id="focusBtn" aria-label="Beam focus">WIDE</button>
