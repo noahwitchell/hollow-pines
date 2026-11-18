@@ -1,0 +1,68 @@
+<title>Hollow Pines</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jacquard+12&family=VT323&display=swap">
+<style>
+/* Layout: full-bleed low-res canvas. Left half = walk stick, right half = aim stick, light + focus switches on the right edge, cards for title / pause / endings. One committed night look, so no light theme. */
+:root{
+  --night:#040508; --ink:#d9d2c0; --dim:#7a766c; --beam:#f2e2b0; --ember:#e0743a; --red:#c23a2e; --line:#2b2c33;
+  --title:'Jacquard 12','VT323',Georgia,serif; --mono:'VT323',ui-monospace,Menlo,monospace;
+  --sl:max(16px, env(safe-area-inset-left, 0px)); --sr:max(16px, env(safe-area-inset-right, 0px));
+  --st:max(10px, env(safe-area-inset-top, 0px)); --sb:max(10px, env(safe-area-inset-bottom, 0px));
+  color-scheme:dark;
+}
+html.rot{--sl:max(16px, env(safe-area-inset-top, 0px));--sr:max(16px, env(safe-area-inset-bottom, 0px));--st:max(10px, env(safe-area-inset-right, 0px));--sb:max(10px, env(safe-area-inset-left, 0px))}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:var(--night);color:var(--ink);overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none;font-family:var(--mono)}
+body{position:fixed;inset:0}
+/* the game is always landscape: turned 90 degrees when the phone is upright */
+html.rot body{right:auto;bottom:auto;width:100vh;height:100vw;transform-origin:0 0;transform:rotate(90deg) translateY(-100%)}
+#app{position:absolute;inset:0;overflow:hidden;background:var(--night)}
+#cv{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+#touch{position:absolute;inset:0}
+#vig{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(90,0,0,.55) 100%)}
+.stick{position:absolute;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:2px solid rgba(217,210,192,.16);pointer-events:none}
+.stick i{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:rgba(217,210,192,.14)}
+.hint{position:absolute;bottom:calc(var(--sb) + 8px);font-size:18px;letter-spacing:.2em;color:var(--dim);pointer-events:none;transition:opacity 1.5s}
+#hintL{left:calc(var(--sl) + 40px)}#hintR{right:calc(var(--sr) + 110px)}
+button{font:inherit;color:var(--ink);background:transparent;border:2px solid var(--line);border-radius:0;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
+#pauseBtn{position:absolute;left:var(--sl);top:var(--st);width:40px;height:40px;font-size:20px;color:var(--dim);border-color:transparent}
+#rbtns{position:absolute;right:var(--sr);top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:14px}
+#focusBtn{width:58px;height:34px;font-size:17px;letter-spacing:.08em;color:var(--dim);background:rgba(4,5,8,.5)}
+#focusBtn.narrow{color:var(--beam);border-color:#5b5440}
+#lightBtn{width:72px;height:72px;border-radius:50%;font-size:17px;letter-spacing:.1em;color:var(--dim);background:rgba(4,5,8,.5);border-color:#33343c}
+#lightBtn.on{color:#1a1608;background:var(--beam);border-color:var(--beam);box-shadow:0 0 18px rgba(242,226,176,.25)}
+#lightBtn.dead{color:var(--ember);background:rgba(4,5,8,.5);border-color:#5a3020;box-shadow:none}
+#card{position:absolute;inset:0;display:grid;place-items:center;background:rgba(2,2,4,.55);padding:var(--st) var(--sr) var(--sb) var(--sl);z-index:20;overflow:auto}
+#card.solid{background:rgba(2,2,4,.92)}
+.box{max-width:520px;width:100%;display:flex;flex-direction:column;gap:12px;text-align:center}
+.box h1{font-family:var(--title);font-weight:400;font-size:clamp(56px,13vh,96px);line-height:.9;margin:0;color:var(--beam);text-shadow:0 0 24px rgba(242,226,176,.18);text-wrap:balance}
+.box h2{font-family:var(--title);font-weight:400;font-size:clamp(40px,10vh,64px);line-height:1;margin:0;text-wrap:balance}
+.box h2.bad{color:var(--red)}.box h2.good{color:var(--beam)}
+.box p{margin:0;font-size:21px;line-height:1.15;color:var(--ink);text-wrap:balance}
+.box p.dim{color:var(--dim);font-size:18px}
+.box ul{margin:0;padding:0;list-style:none;text-align:left;display:flex;flex-direction:column;gap:6px;font-size:19px;line-height:1.1}
+.box ul b{color:var(--beam);font-weight:400}
+.row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.box button{padding:8px 18px;font-size:22px;letter-spacing:.06em;min-width:150px}
+.box button.primary{background:var(--beam);color:#1a1608;border-color:var(--beam)}
+.stats{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;font-size:19px;color:var(--dim);font-variant-numeric:tabular-nums}
+.stats b{display:block;font-size:30px;color:var(--ink);font-weight:400}
+@media (prefers-reduced-motion: reduce){.hint{transition:none}}
+</style>
+<div id="app">
+  <canvas id="cv"></canvas>
+  <div id="touch"></div>
+  <div id="vig"></div>
+  <div class="stick" id="stL" hidden><i></i></div>
+  <div class="stick" id="stR" hidden><i></i></div>
+  <div class="hint" id="hintL" hidden>WALK</div>
+  <div class="hint" id="hintR" hidden>AIM</div>
+  <button id="pauseBtn" aria-label="Pause" hidden>II</button>
+  <div id="rbtns" hidden>
+    <button id="focusBtn" aria-label="Beam focus">WIDE</button>
+    <button id="lightBtn" class="on" aria-label="Flashlight">LIGHT</button>
+  </div>
+  <div id="card"><div class="box"><h1>Hollow Pines</h1><p class="dim">Loading the woods</p></div></div>
+</div>
