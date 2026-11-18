@@ -531,7 +531,6 @@ function updatePlayer(dt) {
   let aimInput = false;
   if (stick.aim) { const dx = stick.aim.x - stick.aim.ox, dy = stick.aim.y - stick.aim.oy; if (Math.hypot(dx, dy) > 12) { P.aimT = Math.atan2(dy, dx); aimInput = true; } }
   else if (mouseAim) { const s = worldToCss(P.x, P.y); P.aimT = Math.atan2(mouseAim.y - s.y, mouseAim.x - s.x); aimInput = true; }
-  if (!aimInput && P.moving && m > 0.3) P.aimT = P.aim + clamp(wrapA(P.face - P.aim), -2.2 * dt, 2.2 * dt);
   const diff = wrapA(P.aimT - P.aim);
   P.aim = wrapA(P.aim + clamp(diff, -7 * dt, 7 * dt) * (aimInput ? 1 : 1));
 }
@@ -554,7 +553,7 @@ function updateBattery(dt) {
   beam.hw = narrow ? 0.24 : 0.52;
   beam.R = (narrow ? 22 : 13) * (0.6 + 0.4 * base);
   beam.cosO = Math.cos(Math.min(Math.PI, beam.hw * 1.4));
-  beam.aim = P.aim + (shakeR ? Math.sin(tNow * 13) * 0.05 + (vnoise(tNow * 9, 2) - 0.5) * 0.12 : (vnoise(tNow * 1.3, 5) - 0.5) * 0.03);
+  beam.aim = P.aim + (shakeR ? Math.sin(tNow * 13) * 0.05 + (vnoise(tNow * 9, 2) - 0.5) * 0.12 : (vnoise(tNow * 0.6, 5) - 0.5) * 0.012);
   adapt = beam.out > 0.05 ? Math.max(0, adapt - dt * 2) : Math.min(1, adapt + dt / 7);
 }
 function beamAt(x, y, ext = 1) {
@@ -965,12 +964,12 @@ const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v +
 const LEV = 6;
 function render(dt) {
   // camera leans toward where the light points
-  const lead = beam.out > 0.05 ? (narrow ? 7 : 5) : 1.2;
+  const lead = lightOn ? (narrow ? 7 : 5) : 1.2;
   const tx = P.x + Math.cos(P.aim) * lead, ty = P.y + Math.sin(P.aim) * lead;
-  const kk = 1 - Math.exp(-dt * 2.5);
+  const kk = 1 - Math.exp(-dt * 1.8);
   cam.x += (tx - cam.x) * kk; cam.y += (ty - cam.y) * kk;
   shake = Math.max(0, shake - dt * 2);
-  camX = cam.x + (shake > 0 ? (R() - 0.5) * shake * 0.5 : 0); camY = cam.y + (shake > 0 ? (R() - 0.5) * shake * 0.5 : 0);
+  camX = Math.round((cam.x + (shake > 0 ? (R() - 0.5) * shake * 0.5 : 0)) * PPM) / PPM; camY = Math.round((cam.y + (shake > 0 ? (R() - 0.5) * shake * 0.5 : 0)) * PPM) / PPM;
   ob.fill(0); LF.fill(0);
   const hwM = W / 2 / PPM + 3, hhM = H / 2 / PPM + 3;
   const vis = [];
@@ -995,14 +994,13 @@ function render(dt) {
 function shade() {
   const on = beam.out > 0.001, ax = Math.cos(beam.aim), ay = Math.sin(beam.aim), hw = beam.hw, hwO = hw * 1.35, hwI = hw * 0.55, cosO = beam.cosO, Rr = beam.R, RO = Rr * 1.25, RI = Rr * 0.55;
   const bo = beam.out, tr = beam.tr, tg = beam.tg, tb = beam.tb, px = P.x, py = P.y;
-  const amb = adapt * 0.0075; const grainF = (tNow * 24 | 0) * 7919;
+  const amb = adapt * 0.0075; const grainF = (tNow * 8 | 0) * 7919;
   const hwM = W / 2 / PPM + 1, hhM = H / 2 / PPM + 1;
   const Ls = [];
   for (const l of lights) {
     if (Math.abs(l.x - camX) > hwM + l.r || Math.abs(l.y - camY) > hhM + l.r) continue;
     let i = l.i;
-    if (!l.lamp) i *= 0.82 + 0.18 * vnoise(tNow * 7 + l.ph, l.ph) + (R() - 0.5) * 0.06;
-    else i *= R() < 0.004 ? 0.6 : 1;
+    if (!l.lamp) i *= 0.92 + 0.08 * vnoise(tNow * 2.2 + l.ph, l.ph);
     Ls.push({ x: l.x, y: l.y, r: l.r, i, c: l.c });
   }
   for (const m of moons) if (Math.abs(m.x - camX) < hwM + m.r && Math.abs(m.y - camY) < hhM + m.r) Ls.push({ x: m.x, y: m.y, r: m.r, i: m.i, c: [0.55, 0.66, 0.95], moon: true });
@@ -1044,7 +1042,7 @@ function shade() {
       }
       let m = lr > lg ? lr : lg; if (lb > m) m = lb;
       if (m <= 0.0005) { out32[i] = BLACK; continue; }
-      const dth = m < 0.035 ? hash2(x + grainF, y * 3 + grainF) : BAY[bayRow | (x & 3)];
+      const dth = m < 0.014 ? hash2(x + grainF, y * 3 + grainF) : BAY[bayRow | (x & 3)];
       let q = Math.floor(Math.pow(m, 0.72) * LEV + dth) / LEV;
       if (q <= 0) { out32[i] = BLACK; continue; }
       if (q > 1.3) q = 1.3;
@@ -1092,7 +1090,7 @@ function overlays() {
   for (const f of [CAMP, ...fires]) {
     const [sx, sy] = s2(f.x, f.y); if (!onScr(sx, sy, 6)) continue;
     const big = f !== CAMP;
-    for (let n = 0; n < (big ? 14 : 4); n++) {
+    for (let n = 0; n < (big ? 8 : 3); n++) {
       const rx = (R() - 0.5) * (big ? 5 : 3), ry = (R() - 0.5) * (big ? 5 : 3) - (big ? R() * 2 : 0), hot = R();
       px1(sx + rx, sy + ry, 255, hot > 0.6 ? 220 : 140, hot > 0.85 ? 120 : 40, big ? 0.9 : 0.5);
     }
