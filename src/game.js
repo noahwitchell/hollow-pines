@@ -43,6 +43,15 @@ const ground = new Uint32Array(GW * GH);
 const HC = 6, HGX = Math.ceil((WX1 - WX0) / HC), HGY = Math.ceil((WY1 - WY0) / HC);
 let PX = [], solidG, decorG, trees, reflectors, decoys, moons, fires, lights, logs, rocks, ferns, bushes;
 let CAR, CAMP, TENT, CAMPER, POST, BRIDGE, BARRIER, hazards;
+let FORK, BR = [], DEN, DENPROPS = [], DARK = [];
+// stretches under thick canopy: no moonlight gets through, so with the light off you see nothing at all
+function darkAt(y) { let d = 0; for (const [a, b] of DARK) d = Math.max(d, sstep(a + 6, a - 2, y) * sstep(b - 6, b + 2, y)); return d; }
+function distBranch(x, y) {
+  if (!BR.length || y > FORK.y + 3 || y < DEN.y - 12) return 99;
+  let best = 99;
+  for (let i = 0; i < BR.length - 1; i++) { const a = BR[i], b = BR[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy, t = clamp(((x - a[0]) * dx + (y - a[1]) * dy) / L2, 0, 1); best = Math.min(best, Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t)); }
+  return best;
+}
 let rnd = mulberry32(1);
 
 const PAL = {
@@ -61,7 +70,8 @@ const PAL = {
   camper: [C('#b8503a'), C('#5a2418'), C('#d9b08c'), C('#262422'), C('#e0d6c0')],
   tent: ['#4f6a52', '#3c5440', '#6b8a6c'].map(C), car: ['#6a4a3c', '#53392e', '#1d2227', '#a8b0b8'].map(C), refl: C('#cfe6f2'),
   stone: ['#7d7a72', '#5f5c56'].map(C), log: ['#5a4230', '#7c6248', '#3c2c20'].map(C), post: C('#4a3a2a'),
-  plank: ['#6e5638', '#5a452c', '#7d6442'].map(C), stripe: [C('#c8c0a8'), C('#a8432c')],
+  plank: ['#6e5638', '#5a452c', '#7d6442'].map(C), bone: [C('#cfc6b0'), C('#a49b86')], pack: [C('#3d5a7a'), C('#2a3f57')], torn: [C('#7a6a3a'), C('#5a4c28'), C('#1a1612')],
+  coon: ['#6b6862', '#3a3835', '#a9a59b', '#1c1b1a'].map(C), rabbit: ['#7a6650', '#5a4a3a', '#d8d0c0'].map(C), fox: ['#a8582a', '#7a3c1c', '#e8e0d0', '#2a1a12'].map(C), owl: C('#4a4036'), stripe: [C('#c8c0a8'), C('#a8432c')],
 };
 
 const roadX = y => 3 * Math.sin(y * 0.031) + 1.5 * Math.sin(y * 0.083 + 1);
@@ -143,6 +153,17 @@ function buildWorld(seed) {
   let by = CREEKY; for (let i = 0; i < 6; i++) by = creekY(pathX(by));
   BRIDGE = { x: pathX(by), y: by, a: Math.atan2(-1, (pathX(by - 1) - pathX(by + 1)) / 2) };
 
+  // the fork: an old path, just as worn, peels off into the creature's place
+  FORK = { y: PY0 - (PY0 - PEND) * 0.55 };
+  {
+    const y0 = FORK.y, x0 = pathX(y0), tdx = (pathX(y0 - 1) - pathX(y0 + 1)) / 2;
+    const side = Math.sign(x0 + tdx * 20 - pathX(y0 - 20)) || 1; // keep going the way the path was heading, then bend away from it
+    let x = x0, y = y0, th = Math.atan2(-1, tdx); BR = [];
+    for (let i = 0; i <= 46; i++) { BR.push([x, y]); if (i > 10) th += side * 0.036; x = clamp(x + Math.cos(th), -60, 60); y += Math.sin(th); }
+    FORK.x = x0; DEN = { x, y };
+  }
+  DARK = [[PY0 - 58, PY0 - 98], [FORK.y + 22, FORK.y - 30]];
+
   // places
   CAR = { x: roadX(14) + 0.4, y: 14, a: -Math.PI / 2 + 0.06, w: 4.4, h: 1.9 };
   POST = { x: roadX(PY0) - 3.9, y: PY0 + 0.6 };
@@ -158,9 +179,9 @@ function buildWorld(seed) {
   // moonlight: open sky over the road, gaps in the canopy along the path
   for (let y = 24; y > CREEKY - 16; y -= 7 + rnd() * 5) moons.push({ x: roadX(y) + (rnd() - 0.5) * 5, y, r: 4.2 + rnd() * 2.4, i: 0.09 + rnd() * 0.04 });
   moons.push({ x: BRIDGE.x, y: BRIDGE.y, r: 5.5, i: 0.12 });
-  for (let i = 0; i < 16; i++) { const y = PY0 - 30 - rnd() * (PY0 - PEND - 40), x = pathX(y) + (rnd() - 0.5) * 18; moons.push({ x, y, r: 2.4 + rnd() * 2.4, i: 0.07 + rnd() * 0.05 }); }
+  for (let i = 0; i < 18; i++) { const y = PY0 - 30 - rnd() * (PY0 - PEND - 40), x = pathX(y) + (rnd() - 0.5) * 18; if (darkAt(y) < 0.2) moons.push({ x, y, r: 2.4 + rnd() * 2.4, i: 0.07 + rnd() * 0.05 }); }
 
-  const clear = [{ x: CAMP.x + 1, y: CAMP.y - 0.5, r: 9 }, { x: CAR.x, y: CAR.y, r: 4 }, { x: POST.x, y: POST.y, r: 1.6 }];
+  const clear = [{ x: CAMP.x + 1, y: CAMP.y - 0.5, r: 9 }, { x: CAR.x, y: CAR.y, r: 4 }, { x: POST.x, y: POST.y, r: 1.6 }, { x: DEN.x, y: DEN.y, r: 5.5 }];
   const inClear = (x, y, pad = 0) => clear.some(c => Math.hypot(x - c.x, y - c.y) < c.r + pad);
   const nearCreek = (x, y, pad = 0) => Math.abs(y - creekY(x)) < 2.3 + pad;
 
@@ -197,9 +218,10 @@ function buildWorld(seed) {
     const nf = (rnd() * 2.6) | 0;
     for (let k = 0; k < nf; k++) {
       const fx = gx + rnd() * CELL, fy = gy + rnd() * CELL;
-      if (distPath(fx, fy) > 1.1 && !onRoad(fx, fy, 0.6) && !nearCreek(fx, fy, -0.6) && !inClear(fx, fy, -2)) { const o = { x: fx, y: fy, r: 0.35 + rnd() * 0.5, s: rnd() * TAU }; ferns.push(o); addDecor(o); }
+      if (distPath(fx, fy) > 1.1 && distBranch(fx, fy) > 1 && !onRoad(fx, fy, 0.6) && !nearCreek(fx, fy, -0.6) && !inClear(fx, fy, -2)) { const o = { x: fx, y: fy, r: 0.35 + rnd() * 0.5, s: rnd() * TAU }; ferns.push(o); addDecor(o); }
     }
-    if (!edge && (inClear(tx, ty) || road || creek || dp < 1.7)) continue;
+    const db = distBranch(tx, ty);
+    if (!edge && (inClear(tx, ty) || road || creek || dp < 1.7 || db < 1.5)) continue;
     const roll = rnd();
     if (edge || roll < (dp < 4.2 || onRoad(tx, ty, 4.5) ? 0.42 : 0.7)) {
       const k = rnd(), r = edge ? 0.35 + rnd() * 0.35 : 0.15 + Math.pow(rnd(), 2) * 0.4;
@@ -219,11 +241,11 @@ function buildWorld(seed) {
     const x = WX0 + 10 + rnd() * (WX1 - WX0 - 20), y = WY0 + 10 + rnd() * (WY1 - WY0 - 20);
     const a = rnd() * TAU, L = 2.5 + rnd() * 4;
     const x1 = x - Math.cos(a) * L / 2, y1 = y - Math.sin(a) * L / 2, x2 = x + Math.cos(a) * L / 2, y2 = y + Math.sin(a) * L / 2;
-    if ([[x1, y1], [x2, y2], [x, y]].some(([u, v]) => distPath(u, v) < 2.4 || onRoad(u, v, 2) || nearCreek(u, v, 0.5)) || inClear(x, y, 1)) continue;
+    if ([[x1, y1], [x2, y2], [x, y]].some(([u, v]) => distPath(u, v) < 2.4 || distBranch(u, v) < 2 || onRoad(u, v, 2) || nearCreek(u, v, 0.5)) || inClear(x, y, 1)) continue;
     const o = { t: 'log', x, y, x1, y1, x2, y2, r: 0.2 + rnd() * 0.13 }; logs.push(o); addSolid(o);
   }
   // trail reflectors nailed to trees beside the path. One stretch has lost its markers.
-  const gap0 = -175 - rnd() * 30, gap1 = gap0 - 34;
+  const gap0 = FORK.y - 40 - rnd() * 10, gap1 = gap0 - 26;
   let side = 1;
   for (let y = PY0 - 34; y > PEND + 10; y -= 11 + rnd() * 4) {
     if (y < gap0 && y > gap1) continue;
@@ -242,6 +264,16 @@ function buildWorld(seed) {
     side = -side;
   }
   reflectors.push({ x: POST.x, y: POST.y - 0.05, post: true });
+  // at the fork, the right way is marked: a reflector a few metres up the real path (only the beam finds it)
+  { const y = FORK.y - 6; let best = null, bd = 1e9; near(solidG, pathX(y), y, 5, o => { if (o.t !== 'tree') return; const dp = distPath(o.x, o.y), sc = Math.abs(o.y - y) + dp * 0.5 + (distBranch(o.x, o.y) < 3 ? 9 : 0); if (dp > 1.4 && dp < 4.5 && sc < bd) { bd = sc; best = o; } });
+    if (best) { const qx = pathX(best.y) - best.x; reflectors.push({ x: best.x + Math.sign(qx) * (best.r + 0.03), y: best.y }); } }
+  // the den: trees scored high up, a torn tent, bones, someone's pack
+  near(solidG, DEN.x, DEN.y, 9, o => { if (o.t === 'tree' && Math.hypot(o.x - DEN.x, o.y - DEN.y) < 9) o.gouge = true; });
+  DENPROPS = [{ k: 'tent', x: DEN.x + 1.8, y: DEN.y - 1.2, a: 0.7 }, { k: 'pack', x: DEN.x - 1.4, y: DEN.y + 0.9, a: 2.2 }];
+  for (let i = 0; i < 7; i++) DENPROPS.push({ k: 'bone', x: DEN.x + (rnd() - 0.5) * 6, y: DEN.y + (rnd() - 0.5) * 5, a: rnd() * TAU, L: 0.25 + rnd() * 0.35 });
+  DENPROPS.push({ k: 'ribs', x: DEN.x - 0.4, y: DEN.y - 1.6, a: rnd() * TAU });
+  addSolid({ t: 'prop', x: DEN.x + 1.8, y: DEN.y - 1.2, r: 0.9 });
+  reflectors.push({ x: DEN.x - 1.4, y: DEN.y + 0.9, pack: true });
   for (const sg of [-1, 0, 1]) reflectors.push({ x: BARRIER.x + sg * BARRIER.w * 0.34, y: BARRIER.y - 0.12 });
   // pale dead snags with branch arms: in the dark they look a lot like it
   for (let i = 0; i < 18; i++) {
@@ -266,6 +298,7 @@ function bakeGround() {
       let col = pal[n2 < 0.33 ? 2 : n2 < 0.66 ? 0 : 1];
       if (h > 0.93) col = pal[1];
       if (h > 0.988) col = PAL.twig;
+      { const db = wy < FORK.y + 2 && wy > DEN.y - 10 ? distBranch(wx, wy) : 99; if (db < 0.65 + (n2 - 0.5) * 0.4) col = PAL.dirt[h < 0.3 ? 2 : 0]; else if (Math.hypot(wx - DEN.x, wy - DEN.y) < 4.5 && h < 0.5) col = PAL.dirt[2]; }
       if (inPath) {
         const dp = Math.abs(wx - px) / sl, edge = 0.72 + (n2 - 0.5) * 0.5;
         if (dp < edge) col = PAL.dirt[h < 0.2 ? 2 : h > 0.85 ? 1 : 0];
@@ -371,6 +404,10 @@ const snd = {
   sputter() { if (!snd.ok()) return; const t = AC.currentTime, b = bus(null, null, 1); for (let i = 0; i < 4; i++) nz(b, t + i * 0.05 + Math.random() * 0.03, 0.012, 3500, 0.5, 0.06, 'highpass'); tn(b, t, 0.25, 120, 'square', 0.01, 120); },
   owl(x, y) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1.6); tn(b, t, 0.3, 410, 'sine', 0.18, 370, 0.05); tn(b, t + 0.45, 0.22, 400, 'sine', 0.12, 380, 0.04); tn(b, t + 0.85, 0.6, 405, 'sine', 0.16, 350, 0.06); },
   deer(x, y) { for (let i = 0; i < 6; i++) setTimeout(() => { if (snd.ok()) { const a = DEER.on ? DEER : { x, y }; snd.rustle(a.x, a.y, 0.6); if (i % 2) snd.twig(a.x, a.y, 0.6); } }, i * 220); },
+  chitter(x, y) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 0.8); for (let i = 0; i < 4 + (Math.random() * 4 | 0); i++) tn(b, t + i * 0.045, 0.03, 1800 + Math.random() * 900, 'square', 0.025, 1300); },
+  thump(x, y) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1); tn(b, t, 0.08, 90, 'sine', 0.3, 50); tn(b, t + 0.13, 0.08, 85, 'sine', 0.22, 50); },
+  bark(x, y) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1.4); nz(b, t, 0.16, 1100, 1.2, 0.35, 'bandpass', 700, 0.01); tn(b, t, 0.15, 620, 'sawtooth', 0.06, 380, 0.01); },
+  flap(x, y) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1.2); nz(b, t, 0.12, 320, 0.7, 0.25, 'lowpass', 0, 0.03); },
   win() { if (!snd.ok()) return; const t = AC.currentTime, b = bus(null, null, 1); [220, 277, 330, 440].forEach((f, i) => tn(b, t + i * 0.25, 2.6, f, 'triangle', 0.06, 0, 0.3)); },
   caught() { if (!snd.ok()) return; const t = AC.currentTime, b = bus(null, null, 1.2); nz(b, t, 1.2, 900, 0.5, 0.8, 'bandpass', 200, 0.005); tn(b, t, 1.4, 70, 'sawtooth', 0.4, 30, 0.005); tn(b, t, 0.9, 1480, 'square', 0.05, 600, 0.005); },
 };
@@ -797,8 +834,49 @@ function updateDeer(dt) {
   }
 }
 
+// ---------------- other animals ----------------
+// Harmless things moving in the woods: a raccoon rummaging, a rabbit frozen then bolting, a fox that watches you,
+// an owl crossing overhead, now and then a deer. They rustle and their eyes catch the beam too, so every noise is a question.
+let critters = [], critT = 14, owl = null;
+const CRIT = { raccoon: { sp: 3.2, flee: 5, len: 0.42 }, rabbit: { sp: 6.5, flee: 6.5, len: 0.24 }, fox: { sp: 5.5, flee: 8, len: 0.5 } };
+function spawnCritter() {
+  const kinds = ['raccoon', 'raccoon', 'rabbit', 'rabbit', 'fox'], kind = kinds[R() * kinds.length | 0];
+  const a = (P.moving ? P.face : beam.aim) + (R() - 0.5) * 1.8, dd = 9 + R() * 8;
+  const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd, 0.4); if (!p) return;
+  critters.push({ kind, x: p[0], y: p[1], a: R() * TAU, st: 'idle', t: 0, litT: 0, nextSnd: 1 + R() * 3 });
+}
+function startOwl() { const a = R() * TAU, dd = 14, x = P.x + Math.cos(a) * dd, y = P.y + Math.sin(a) * dd, b = a + Math.PI + (R() - 0.5) * 0.7; owl = { x, y, vx: Math.cos(b) * 6.5, vy: Math.sin(b) * 6.5, t: 0, flap: 0.2 }; snd.owl(x, y); }
+function updateCritters(dt) {
+  critT -= dt;
+  if (critT <= 0 && S.phase !== 'camp') {
+    critT = 14 + R() * 20;
+    if (critters.length < 2) { if (!DEER.on && R() < 0.22) spawnDeer(); else spawnCritter(); }
+    if (!owl && R() < 0.3) startOwl();
+  }
+  for (const c of critters) {
+    c.t += dt; const k = CRIT[c.kind], d = Math.hypot(c.x - P.x, c.y - P.y);
+    if (c.st === 'idle') {
+      if (beamAt(c.x, c.y, 1.4) > 0.05) c.litT += dt;
+      if (c.kind === 'fox') c.a += clamp(wrapA(Math.atan2(P.y - c.y, P.x - c.x) - c.a), -2 * dt, 2 * dt); // it watches you
+      else if (c.kind === 'raccoon') c.a += Math.sin(c.t * 1.3) * dt * 0.9;                            // rummaging
+      if (c.t > c.nextSnd && d < 22) { c.nextSnd = c.t + 2 + R() * 4; if (c.kind === 'raccoon') snd.chitter(c.x, c.y); else snd.rustle(c.x, c.y, 0.2); }
+      if (d < k.flee || (P.mode === 'run' && d < k.flee * 2) || c.litT > (c.kind === 'rabbit' ? 1 : 2.5) || c.t > 45) {
+        c.st = 'flee'; c.t = 0; snd.rustle(c.x, c.y, 0.45); fear = Math.max(fear, 0.3);
+        if (c.kind === 'rabbit') snd.thump(c.x, c.y); else if (c.kind === 'fox' && R() < 0.6) snd.bark(c.x, c.y);
+      }
+    } else {
+      const zig = c.kind === 'rabbit' ? Math.sin(c.t * 9) * 0.9 : 0, fa = Math.atan2(c.y - P.y, c.x - P.x) + zig;
+      moveTo(c, c.x + Math.cos(fa) * 3, c.y + Math.sin(fa) * 3, k.sp, dt);
+      if (R() < dt * 4) snd.rustle(c.x, c.y, 0.25);
+      if (d > 30 || c.t > 6) c.dead = true;
+    }
+  }
+  critters = critters.filter(c => !c.dead && Math.hypot(c.x - P.x, c.y - P.y) < 45);
+  if (owl) { owl.t += dt; owl.x += owl.vx * dt; owl.y += owl.vy * dt; if (owl.t > owl.flap) { snd.flap(owl.x, owl.y); owl.flap = owl.t + 0.32 + R() * 0.25; } if (owl.t > 5) owl = null; }
+}
+
 // ---------------- the story (Chapter 1) ----------------
-const S = { phase: 'road', follow: false, teased: false, deer: false, posed: false, talked: false };
+const S = { phase: 'road', follow: false, teased: false, deer: false, posed: false, talked: false, den: false, denT: 0, denBehind: false };
 function progress() {
   // road ~ first 15%, path the rest
   if (P.y > PY0) return clamp((CAR.y - P.y) / (CAR.y - PY0), 0, 1) * 0.15;
@@ -823,6 +901,12 @@ function story(dt) {
     S.posed = true;
     const y = P.y - 17, x = pathX(y) + (R() < 0.5 ? -1 : 1) * 2.4, p = placeFree(x, y);
     if (p) { CR.x = p[0]; CR.y = p[1]; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); CR.eyes = false; CR.nextSnd = 0; CR.harmless = false; setCr('posing'); }
+  }
+  // the den: it doesn't like you here. Its attention climbs, and it comes up behind you
+  if (S.follow && Math.hypot(P.x - DEN.x, P.y - DEN.y) < 11) {
+    if (!S.den) { S.den = true; snd.stinger(false); fear = Math.max(fear, 0.6); }
+    S.denT += dt; if (CR.st !== 'away') CR.A = Math.min(0.92, CR.A + dt * 0.035);
+    if (S.denT > 6 && !S.denBehind && CR.st === 'follow') { S.denBehind = true; evBehind(); }
   }
   // 5. the camp: it won't come near the fire
   if (S.phase === 'path' && Math.hypot(P.x - CAMP.x, P.y - CAMP.y) < 11) {
@@ -911,6 +995,7 @@ function update(dt) {
   updateCreature(dt);
   updateAttention(dt);
   updateDeer(dt);
+  updateCritters(dt);
   updateFear(dt);
 }
 
@@ -990,8 +1075,8 @@ function drawTree(t) {
   for (let pass = 0; pass < 2; pass++) for (let k = 0; k <= n; k++) {
     const f = k / n, cx = sx + lx * f, cy = sy + ly * f, rr = r * (1 - 0.3 * f);
     if (pass === 0) { trunkDisc(cx, cy, rr, b[2], t.x, t.y); continue; }
-    const mark = birch && hash2(k + seed, 3) > 0.7;
-    trunkDisc(cx - lx / (L || 1) * 0, cy, Math.max(0.6, rr - 0.9), mark ? PAL.birchMark : (hash2(k + seed, 9) > 0.75 ? b[1] : b[0]), t.x, t.y);
+    const mark = (birch && hash2(k + seed, 3) > 0.7) || (t.gouge && f > 0.55 && f < 0.75 && (k & 1));
+    trunkDisc(cx - lx / (L || 1) * 0, cy, Math.max(0.6, rr - 0.9), mark ? (t.gouge && !birch ? PAL.stump[0] : PAL.birchMark) : (hash2(k + seed, 9) > 0.75 ? b[1] : b[0]), t.x, t.y);
   }
 }
 function trunkDisc(cx, cy, r, col, wx, wy) {
@@ -1131,6 +1216,30 @@ function drawCreature(dt = 1 / 30) {
   }
   OV = null;
 }
+function drawCritters() {
+  for (const c of critters) {
+    const [sx, sy] = s2(c.x, c.y); if (!onScr(sx, sy, 10)) continue;
+    const a = c.a, ca = Math.cos(a), sa = Math.sin(a), k = PPM * 1.6, run = c.st === 'flee' ? Math.sin(c.t * 22) * 0.9 : 0; // drawn a bit larger than life so they read
+    if (c.kind === 'raccoon') {
+      for (let i = 0; i < 4; i++) disc(sx - ca * (0.24 + i * 0.07) * k + sa * run * 0.3, sy - sa * (0.24 + i * 0.07) * k - ca * run * 0.3, 1.1, i % 2 ? PAL.coon[3] : PAL.coon[2]);
+      ell(sx, sy, a, 0.22 * k, 0.12 * k, (u, v, q) => q > 0.7 ? PAL.coon[1] : PAL.coon[0]);
+      const hx = sx + ca * 0.24 * k, hy = sy + sa * 0.24 * k; disc(hx, hy, 1.6, PAL.coon[2]); line(hx - sa * 1.2, hy + ca * 1.2, hx + sa * 1.2, hy - ca * 1.2, PAL.coon[3]);
+    } else if (c.kind === 'rabbit') {
+      ell(sx, sy, a, 0.13 * k, 0.08 * k, (u, v, q) => q > 0.7 ? PAL.rabbit[1] : PAL.rabbit[0]);
+      const hx = sx + ca * 0.12 * k, hy = sy + sa * 0.12 * k; disc(hx, hy, 1.2, PAL.rabbit[0]);
+      for (const sg of [-1, 1]) line(hx, hy, hx - ca * 1.8 + sa * sg * 0.7, hy - sa * 1.8 - ca * sg * 0.7, PAL.rabbit[1]);
+      const tx = sx - ca * 0.13 * k, ty = sy - sa * 0.13 * k; if (tx >= 0 && ty >= 0 && tx < W && ty < H) ob[(ty | 0) * W + (tx | 0)] = PAL.rabbit[2];
+    } else {
+      for (let i = 0; i < 4; i++) disc(sx - ca * (0.26 + i * 0.09) * k + sa * run * 0.4, sy - sa * (0.26 + i * 0.09) * k - ca * run * 0.4, 1.5 - i * 0.15, i === 3 ? PAL.fox[2] : PAL.fox[0]);
+      ell(sx, sy, a, 0.25 * k, 0.09 * k, (u, v, q) => q > 0.7 ? PAL.fox[1] : PAL.fox[0]);
+      const hx = sx + ca * 0.27 * k, hy = sy + sa * 0.27 * k; disc(hx, hy, 1.5, PAL.fox[0]); line(hx, hy, hx + ca * 1.8, hy + sa * 1.8, PAL.fox[2]);
+      for (const sg of [-1, 1]) { const ex = hx - ca * 0.6 + sa * sg * 1.0, ey = hy - sa * 0.6 - ca * sg * 1.0; if (ex >= 0 && ey >= 0 && ex < W && ey < H) ob[(ey | 0) * W + (ex | 0)] = PAL.fox[3]; }
+    }
+  }
+  if (owl) { // a dark shape with beating wings, gone in a few seconds
+    const [sx, sy] = s2(owl.x, owl.y); if (onScr(sx, sy, 12)) { const L = Math.hypot(owl.vx, owl.vy) || 1, px = -owl.vy / L, py = owl.vx / L, w = 5 + Math.sin(owl.t * 16) * 2.5; for (const sg of [-1, 1]) line(sx, sy, sx + px * w * sg - owl.vx / L * 1.5, sy + py * w * sg - owl.vy / L * 1.5, PAL.owl, 0.7); disc(sx, sy, 1.3, PAL.owl); }
+  }
+}
 function drawDeer() {
   if (!DEER.on) return;
   const [sx, sy] = s2(DEER.x, DEER.y); if (!onScr(sx, sy, 14)) return;
@@ -1156,6 +1265,13 @@ function drawProps() {
   { const [sx, sy] = s2(CAR.x, CAR.y); if (onScr(sx, sy, 30)) rect(sx, sy, CAR.a, CAR.w / 2 * PPM, CAR.h / 2 * PPM, (u, v) => (Math.abs(u) > 0.93 ? PAL.car[1] : (u > -0.35 && u < 0.45 ? (Math.abs(v) < 0.8 ? PAL.car[2] : PAL.car[0]) : (Math.abs(v) > 0.88 ? PAL.car[1] : PAL.car[0])))); }
   { const [sx, sy] = s2(BARRIER.x, BARRIER.y); if (onScr(sx, sy, 30)) { for (const sg of [-1, 1]) disc(sx + sg * BARRIER.w * 0.42 * PPM, sy, 1.4, PAL.post); rect(sx, sy, 0, BARRIER.w / 2 * PPM, 0.16 * PPM, (u) => PAL.stripe[Math.floor((u + 1) * 5) % 2]); } }
   { const [sx, sy] = s2(POST.x, POST.y); if (onScr(sx, sy, 6)) disc(sx, sy, 1.3, PAL.post); }
+  for (const d of DENPROPS) {
+    const [sx, sy] = s2(d.x, d.y); if (!onScr(sx, sy, 16)) continue; const ca = Math.cos(d.a), sa = Math.sin(d.a);
+    if (d.k === 'tent') rect(sx, sy, d.a, 1.2 * PPM, 0.85 * PPM, (u, v) => (Math.abs(u - 0.2 + v * 0.3) < 0.12 && v > -0.6) ? PAL.torn[2] : (v < 0 ? PAL.torn[0] : PAL.torn[1])); // slashed open
+    else if (d.k === 'pack') rect(sx, sy, d.a, 0.3 * PPM, 0.22 * PPM, (u, v) => Math.abs(v) < 0.15 ? PAL.refl : (u > 0.6 ? PAL.pack[1] : PAL.pack[0]));
+    else if (d.k === 'bone') { const L = d.L * PPM; line(sx - ca * L, sy - sa * L, sx + ca * L, sy + sa * L, PAL.bone[0]); disc(sx + ca * L, sy + sa * L, 0.7, PAL.bone[1]); }
+    else if (d.k === 'ribs') { line(sx - ca * 7, sy - sa * 7, sx + ca * 7, sy + sa * 7, PAL.bone[1]); for (let i = -2; i <= 2; i++) { const bx = sx + ca * i * 2.6, by = sy + sa * i * 2.6; line(bx, by, bx - sa * 4.5 + ca * 1.2, by + ca * 4.5 + sa * 1.2, PAL.bone[0]); line(bx, by, bx + sa * 4.5 + ca * 1.2, by - ca * 4.5 + sa * 1.2, PAL.bone[0]); } }
+  }
   { // the camper, hunched on a log, hands out to the fire
     const [sx, sy] = s2(CAMPER.x, CAMPER.y); if (onScr(sx, sy, 12)) {
       OV = [CAMPER.x, CAMPER.y]; const a = CAMPER.a, ca = Math.cos(a), sa = Math.sin(a), k = PPM;
@@ -1190,6 +1306,7 @@ function render(dt) {
   for (const o of vis) if (o.decoy) drawDecoy(o);
   drawProps();
   drawDeer();
+  drawCritters();
   drawCreature(dt);
   if (mode !== 'title') drawPlayer();
   const tv = []; near(solidG, camX, camY, Math.max(hwM, hhM) + 4, o => { if (o.t === 'tree') tv.push(o); });
@@ -1219,7 +1336,7 @@ function shade() {
   const nL = Ls.length;
   let i = 0;
   for (let y = 0; y < H; y++) {
-    const wy = camY + (y + 0.5 - H / 2) / PPM, gy = ((wy - WY0) * TEX) | 0;
+    const wy = camY + (y + 0.5 - H / 2) / PPM, gy = ((wy - WY0) * TEX) | 0, nvRow = nv * (1 - darkAt(wy) * 0.93);
     const bayRow = (y & 3) << 2;
     for (let x = 0; x < W; x++, i++) {
       let wx = camX + (x + 0.5 - W / 2) / PPM, wyy = wy;
@@ -1253,7 +1370,7 @@ function shade() {
         }
       }
       let m = lr > lg ? lr : lg; if (lb > m) m = lb;
-      const nl = nv > 0 ? nv * (0.11 + mn * 1.6) * (LF[i] === 2 ? 0.4 : 1) : 0;
+      const nl = nvRow > 0 ? nvRow * (0.11 + mn * 1.6) * (LF[i] === 2 ? 0.4 : 1) : 0;
       if (m <= 0.0005 && nl <= 0.004) { out32[i] = BLACK; continue; }
       const cr = col & 255, cg = (col >> 8) & 255, cb = (col >> 16) & 255;
       let r = 0, g = 0, b = 0;
@@ -1293,6 +1410,11 @@ function overlays() {
       for (let oy = -big; oy <= big; oy++) for (let ox = -big; ox <= big; ox++) { if (ox || oy) px1(ex + ox, ey + oy, h[0], h[1], h[2], v * 0.4); }
       px1(ex, ey, c[0], c[1], c[2], v); if (red) { px1(ex + 1, ey, c[0], c[1], c[2], 1); px1(ex, ey + 1, c[0], c[1], c[2], 1); }
     }
+  }
+  for (const c of critters) { // small animals' eyes: low, close-set, green or red
+    const L = CRIT[c.kind].len * 0.95, hx = c.x + Math.cos(c.a) * L, hy = c.y + Math.sin(c.a) * L;
+    const face = Math.cos(wrapA(Math.atan2(P.y - c.y, P.x - c.x) - c.a)), I = beamAt(hx, hy, 3) * 2.6 * sstep(0.3, 0.8, face);
+    if (I > 0.04) eyes(hx, hy, c.a, 0.8, c.kind === 'rabbit' ? [255, 150, 120] : c.kind === 'fox' ? [255, 230, 140] : [200, 255, 150], I);
   }
   if (DEER.on) {
     const hx = DEER.x + Math.cos(DEER.a) * 0.92, hy = DEER.y + Math.sin(DEER.a) * 0.92;
@@ -1340,7 +1462,8 @@ const HOWTO = `<ul>
 <li><b>Left thumb</b> walks. A small push creeps quietly, push all the way to run. Running only lasts a few seconds.</li>
 <li><b>Right thumb</b> aims the flashlight. Tap there, or press LIGHT, to switch it off and on.</li>
 <li><b>The battery sags</b> the longer it runs. Switch it off and it comes back. FAR throws the beam farther but drains it fast.</li>
-<li><b>Your eyes adjust.</b> Keep the light off for a few seconds and the woods come up, faintly. Switching it on again ruins it.</li>
+<li><b>In the dark your eyes adjust</b> and the woods come up faintly, but only where moonlight gets through. Under thick trees you'll need the light.</li>
+<li><b>Reflectors</b> on the trees mark the trail. They only shine back when the beam finds them.</li>
 <li><b>Something follows you.</b> A glance is fine. Don't stare at it, and don't be loud near it. When the crickets stop, it's close.</li>
 <li><b>If it comes for you,</b> sprint, put trees between you, or go dark and keep still. Fires keep it away.</li>
 </ul>`;
@@ -1355,7 +1478,7 @@ function resetRun() {
   Object.assign(P, { x: CAR.x - 1.7, y: CAR.y - 0.4, aim: -Math.PI / 2, aimT: -Math.PI / 2, vx: 0, vy: 0, stam: 1, mode: 'still', face: -Math.PI / 2 });
   Object.assign(bat, { c: 1, r: 1, dead: false, force: 0, nextFl: 35 + R() * 30, flT: 0, plant: false });
   Object.assign(D, { t: 0, next: 30, bold: 0, sightings: 0, hunts: 0, bluffs: 0, heat: 0, amb: 12, mute: 0 });
-  Object.assign(S, { phase: 'road', follow: false, teased: false, deer: false, posed: false, talked: false });
+  Object.assign(S, { phase: 'road', follow: false, teased: false, deer: false, posed: false, talked: false, den: false, denT: 0, denBehind: false }); critters = []; owl = null; critT = 14;
   CR.A = 0; CR.st = 'away'; CR.x = CR.y = 1e6; CR.eyeP = null; DEER.on = false; ripples = []; talk = null; talkEl.hidden = true;
   lightOn = true; narrow = false; fear = 0.05; runTime = 0; wonT = 0; adapt = 0; cam.x = P.x; cam.y = P.y - 3; syncBtns();
 }
