@@ -545,8 +545,9 @@ touchEl.addEventListener('pointerdown', e => {
   if (e.pointerType === 'mouse') { if (e.button === 0) toggleLight(); else if (e.button === 2) toggleFocus(); return; }
   const left = p.x < VW() * 0.5;
   const s = { id: e.pointerId, ox: p.x, oy: p.y, x: p.x, y: p.y, t0: performance.now(), moved: 0 };
-  if (left && !stick.move) { stick.move = s; stL.hidden = false; placeStick(stL, p.x, p.y); stL.firstChild.style.transform = ''; }
-  else if (!left && !stick.aim) { stick.aim = s; stR.hidden = false; placeStick(stR, p.x, p.y); stR.firstChild.style.transform = ''; }
+  // a new finger on a side always takes that stick over, so a lost touch-end can never jam it
+  if (left) { stick.move = s; stL.hidden = false; placeStick(stL, p.x, p.y); stL.firstChild.style.transform = ''; }
+  else { stick.aim = s; stR.hidden = false; placeStick(stR, p.x, p.y); stR.firstChild.style.transform = ''; }
   try { touchEl.setPointerCapture(e.pointerId); } catch (er) {}
 });
 touchEl.addEventListener('contextmenu', e => e.preventDefault());
@@ -569,6 +570,13 @@ function endTouch(e) {
   }
 }
 touchEl.addEventListener('pointerup', endTouch); touchEl.addEventListener('pointercancel', endTouch);
+touchEl.addEventListener('lostpointercapture', endTouch);
+addEventListener('pointerup', endTouch); addEventListener('pointercancel', endTouch);
+function dropSticks() { stick.move = stick.aim = null; stL.hidden = stR.hidden = true; }
+// iOS can swallow pointerup (edge swipes, notification pulls, multi-finger gestures): trust the real touch list
+addEventListener('touchend', e => { if (e.touches.length === 0) dropSticks(); }, { passive: true });
+addEventListener('touchcancel', e => { if (e.touches.length === 0) dropSticks(); }, { passive: true });
+addEventListener('blur', dropSticks); addEventListener('pagehide', dropSticks);
 addEventListener('keydown', e => {
   keys[e.code] = true;
   if (mode === 'talk' && (e.code === 'Space' || e.code === 'Enter')) { nextLine(); e.preventDefault(); return; }
