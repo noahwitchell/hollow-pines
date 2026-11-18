@@ -498,7 +498,8 @@ function updatePlayer(dt) {
   if (m > 0.12) { if (m < 0.5) { sp = lerp(0.6, 1.0, (m - 0.12) / 0.38); md = 'sneak'; } else if (m < 0.96 || P.stam <= 0.02) { sp = lerp(1.45, 1.9, clamp((m - 0.5) / 0.4, 0, 1)); md = 'walk'; } else { sp = 4.0; md = 'run'; } }
   P.inBush = inBush(P.x, P.y);
   if (P.inBush) sp *= 0.55;
-  if (md === 'run') P.stam = Math.max(0, P.stam - dt / 7); else P.stam = Math.min(1, P.stam + dt / (md === 'still' ? 8 : 12));
+  if (md === 'run') P.stam = Math.max(0, P.stam - dt / 12); else P.stam = Math.min(1, P.stam + dt / (md === 'still' ? 6 : 9));
+  if (P.stam < 0.4 && md !== 'run' && tNow > (P.nextPant || 0)) { snd.breath(P.x, P.y, 0.12 + (0.4 - P.stam) * 0.5); P.nextPant = tNow + 1.1 + P.stam * 2; } // out of breath
   const k = 1 - Math.exp(-dt * 10);
   P.vx += (mx * sp - P.vx) * k; P.vy += (my * sp - P.vy) * k;
   P.x += P.vx * dt; P.y += P.vy * dt; collide(P, 0.26);
@@ -508,7 +509,11 @@ function updatePlayer(dt) {
   P.noise = { still: 0, sneak: 0.25, walk: 0.6, run: 1 }[P.mode] + (P.inBush && P.moving ? 0.35 : 0);
   if (P.moving) {
     P.stepT -= dt * spd / 0.75;
-    if (P.stepT <= 0) { P.stepT = 0.75 + R() * 0.5; snd.step(surfaceAt(P.x, P.y), P.mode); if (P.inBush) snd.rustle(P.x + 0.3, P.y, 0.25); }
+    if (P.stepT <= 0) {
+      P.stepT = 0.75 + R() * 0.5; const surf = surfaceAt(P.x, P.y); snd.step(surf, P.mode); if (P.inBush) snd.rustle(P.x + 0.3, P.y, 0.25);
+      // now and then a branch cracks loudly underfoot, and it hears that too
+      if (surf !== 'dirt' && R() < (P.mode === 'run' ? 0.1 : P.mode === 'walk' ? 0.04 : 0.012)) { snd.twig(P.x, P.y, 1.6); if (CR.st !== 'away' && crDist() < 22) CR.A = Math.min(0.9, CR.A + 0.06); }
+    }
   }
   // aim: right stick, mouse, or drift toward walking direction
   let aimInput = false;
@@ -732,7 +737,7 @@ function updateCreature(dt) {
     }
     case 'hunt': {
       // on all fours; a little slower than your sprint, much faster than your walk
-      CR.v = Math.min(3.5, CR.v + dt * 5);
+      CR.v = Math.min(CR.t > 9 ? 3.1 : 3.5, CR.v + dt * 5); // it tires a little in a long chase
       const knows = senses(d);
       if (knows) { noteYou(knows, d); CR.lost = knows === 2 ? 0 : CR.lost + dt * 0.5; } else CR.lost += dt;
       const sf = safeFire(P.x, P.y);
@@ -911,10 +916,9 @@ function update(dt) {
 
 // ---------------- talking ----------------
 const CAMPER_LINES = [
-  ['Camper', 'Whoa. Hey. Hey! You came out of there?'],
+  ['Camper', 'Whoa. Hey. Hey! You came out of there? On your own?'],
   ['Camper', 'Sorry. You\'re the first person I\'ve seen all night. Sit, sit. Get close to the fire.'],
-  ['You', 'My car died back on the road. And the road\'s just... gone, at the creek.'],
-  ['Camper', 'Yeah, the storm took it. Took the phones too. Nothing\'s had a signal since this afternoon.'],
+  ['Camper', 'Car broke down? And the road\'s out at the creek. Yeah. The storm took it. Took the phones too. Nothing\'s had a signal since this afternoon.'],
   ['Camper', 'Something\'s been walking around my camp. Big. It stops when I stop.'],
   ['Camper', 'I keep telling myself it\'s a bear. Bears don\'t... stand like that.'],
   ['Camper', 'There\'s a ranger station up the trail. Couple miles. They\'ll have a radio, a landline, something.'],
@@ -928,9 +932,16 @@ function startTalk(lines, done) {
   if (CR.st !== 'away') { CR.st = 'away'; CR.x = CR.y = 1e6; }
   hud(false); showLine();
 }
-function showLine() { const [who, txt] = talk.lines[talk.i]; talkWho.textContent = who; talkText.textContent = txt; talkEl.hidden = false; talkEl.classList.toggle('you', who === 'You'); }
+function showLine() { const [who] = talk.lines[talk.i]; talkWho.textContent = who; talkText.textContent = ''; talk.n = 0; talkEl.hidden = false; }
+function typeTalk(dt) { // the words come out a little at a time, with a soft murmur
+  if (!talk) return; const txt = talk.lines[talk.i][1]; if (talk.n >= txt.length) return;
+  const was = talk.n | 0; talk.n = Math.min(txt.length, talk.n + dt * 38); const now = talk.n | 0;
+  if (now !== was) { talkText.textContent = txt.slice(0, now); if (now % 3 === 0 && txt[now - 1] !== ' ' && snd.ok()) { const t = AC.currentTime, b = bus(null, null, 1); tn(b, t, 0.04, 150 + Math.random() * 40, 'triangle', 0.035); } }
+}
 function nextLine() {
-  if (!talk) return; snd.click(true);
+  if (!talk) return;
+  const txt = talk.lines[talk.i][1]; if (talk.n < txt.length) { talk.n = txt.length; talkText.textContent = txt; return; } // first tap finishes the line
+  snd.click(true);
   talk.i++;
   if (talk.i >= talk.lines.length) { talkEl.hidden = true; const d = talk.done; talk = null; d && d(); }
   else showLine();
@@ -1039,11 +1050,11 @@ function drawUpright(T0, pose, SW, mouthOpen) {
   const st = pose === 'stoop', rear = pose === 'rear';
   // motion: a stride cycle from distance travelled, plus slow breathing and sway when it stands
   const ph = CR.ph || 0, mv = CR.mv || 0, tt = tNow + (CR.seed || 0);
-  const bob = Math.abs(Math.sin(ph)) * 0.05 * mv + Math.sin(tt * 1.6) * 0.012 * (1 - mv), sway = Math.sin(ph) * 0.05 * mv + Math.sin(tt * 0.45) * 0.025 * (1 - mv);
+  const bob = Math.abs(Math.sin(ph)) * 0.11 * mv + Math.sin(tt * 1.6) * 0.035 * (1 - mv), sway = Math.sin(ph) * 0.12 * mv + Math.sin(tt * 0.45) * 0.06 * (1 - mv);
   const T = (x, h) => h > 0.95 ? T0(x + sway * (h / 2), h + bob) : T0(x, h);
   const hip = st ? 1.0 : 1.2, sh = st ? 1.62 : 1.98, shW = 0.36, hy = st ? 1.6 : 2.05, H0 = PAL.hide[0];
   for (const sg of [-1, 1]) { // legs, heel raised; the swinging leg lifts
-    const lift = Math.max(0, Math.sin(ph + (sg > 0 ? 0 : Math.PI))) * 0.22 * mv, kx = sg * (st ? 0.24 : 0.17) + sg * lift * 0.3;
+    const lift = Math.max(0, Math.sin(ph + (sg > 0 ? 0 : Math.PI))) * 0.4 * mv, kx = sg * (st ? 0.24 : 0.17) + sg * lift * 0.5;
     seg(T, [sg * 0.1, hip], [kx, hip / 2 + lift * 0.7], 0.14, H0, SW); seg(T, [kx, hip / 2 + lift * 0.7], [sg * 0.13, 0.2 + lift], 0.1, H0, SW); seg(T, [sg * 0.13, 0.2 + lift], [sg * 0.16, lift * 0.8], 0.06, H0, SW);
   }
   const tor = [[-0.12, hip - 0.04], [0.12, hip - 0.04], [0.15, hip + 0.13], [0.11, (hip + sh) / 2 - 0.08], [0.2, sh - 0.32], [shW, sh - 0.12], [shW * 0.85, sh + 0.06], [0.16, sh + 0.13],
@@ -1054,7 +1065,7 @@ function drawUpright(T0, pose, SW, mouthOpen) {
   for (const sg of [-1, 1]) { // arms that hang past the knees (or reach up, reared)
     const s0 = [sg * (shW - 0.02), sh - 0.07];
     const el = rear ? [sg * (shW + 0.24), sh + 0.15] : [sg * (shW + 0.14), sh - (st ? 0.55 : 0.7)];
-    const swing = rear ? Math.sin(tt * 9 + sg) * 0.06 : Math.sin(ph + (sg > 0 ? Math.PI : 0)) * 0.16 * mv + Math.sin(tt * 0.8 + sg * 1.3) * 0.03 * (1 - mv);
+    const swing = rear ? Math.sin(tt * 9 + sg) * 0.12 : Math.sin(ph + (sg > 0 ? Math.PI : 0)) * 0.32 * mv + Math.sin(tt * 0.8 + sg * 1.3) * 0.07 * (1 - mv);
     const wr = rear ? [sg * (shW + 0.36) + swing, sh + 0.62] : [sg * (shW + (st ? 0.17 : 0.07)) + swing * 0.3, (st ? 0.3 : 0.52) + swing];
     seg(T, s0, el, 0.13, H0, SW); seg(T, el, wr, 0.08, H0, SW);
     const dir = rear ? 1 : -1;
@@ -1087,7 +1098,7 @@ function drawFours(sx, sy) {
   const a = CR.a, fx = Math.cos(a), fy = Math.sin(a), px = -fy, py = fx, S = 11, [lx, ly] = leanV(sx, sy, 1), L = Math.hypot(lx, ly) || 1, ux = lx / L * 3.2, uy = ly / L * 3.2;
   const Q = (f, s, h) => [sx + (fx * f + px * s) * S + ux * h, sy + (fy * f + py * s) * S + uy * h];
   const H0 = PAL.hide[0], ln = (A, B, r, col) => line(A[0], A[1], B[0], B[1], col, r);
-  const ph = CR.ph || 0, mv = CR.mv || 0, g = Math.sin(ph) * 0.28 * mv, lift = Math.abs(Math.cos(ph)) * 0.25 * mv; // a loping gallop: front and back pairs reach alternately
+  const ph = CR.ph || 0, mv = CR.mv || 0, g = Math.sin(ph) * 0.48 * mv, lift = Math.abs(Math.cos(ph)) * 0.45 * mv; // a loping gallop: front and back pairs reach alternately
   for (const sg of [-1, 1]) ln(Q(-0.45, sg * 0.15, 0.5 + lift), Q(-0.7 - g, sg * 0.38, 0), 0.7, H0);
   const body = []; for (let i = 0; i < 14; i++) { const t = i / 14 * TAU, f = Math.cos(t) * 0.62 - 0.05, s = Math.sin(t) * (Math.cos(t) > 0 ? 0.27 : 0.2); body.push(Q(f, s, 0.6 + Math.cos(t) * 0.2)); }
   fillPoly(body, H0);
@@ -1379,7 +1390,7 @@ function frame(now) {
 }
 function step(dt) {
   if (mode === 'play') update(dt);
-  else if (mode === 'talk') { updateBattery(dt); buildShadows(); P.aim += clamp(wrapA(Math.atan2(CAMPER.y - P.y, CAMPER.x - P.x) - P.aim), -3 * dt, 3 * dt); fear += (0.05 - fear) * dt * 0.5; }
+  else if (mode === 'talk') { typeTalk(dt); updateBattery(dt); buildShadows(); P.aim += clamp(wrapA(Math.atan2(CAMPER.y - P.y, CAMPER.x - P.x) - P.aim), -3 * dt, 3 * dt); fear += (0.05 - fear) * dt * 0.5; }
   else if (mode === 'title') { P.aim = -Math.PI / 2 + Math.sin(tNow * 0.35) * 0.9; P.aimT = P.aim; lightOn = true; updateBattery(dt); bat.c = 1; buildShadows(); }
   else if (mode === 'dying') { deathT += dt; beam.out = deathT < 0.7 ? 1 : 0; beam.hw = 0.6; beam.R = 9; beam.cosO = Math.cos(0.84); beam.aim = P.aim; buildShadows(); if (deathT > 1.8 && card.hidden) endCard(); }
   else if (mode === 'chapter') { wonT += dt; if (wonT > 2.4 && card.hidden) chapterCard(); }
