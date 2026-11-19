@@ -54,7 +54,13 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
 #talk.you b{color:var(--dim)}
 #talk p{margin:2px 0 0;font-size:22px;line-height:1.15;color:var(--ink)}
 #talk span{position:absolute;right:12px;bottom:6px;font-size:15px;color:var(--dim);letter-spacing:.1em}
-@media (prefers-reduced-motion: reduce){.hint{transition:none}}
+#hp{position:absolute;left:calc(var(--sl) + 48px);top:calc(var(--st) + 14px);display:flex;gap:5px;pointer-events:none;transition:opacity .8s;z-index:5}
+#hp i{display:block;width:22px;height:8px;background:var(--red);border:2px solid #5a221a}
+#hp i.gone{background:transparent;border-color:#3a2420}
+#hp.hit{animation:hpHit .9s steps(6)}
+@keyframes hpHit{0%,32%,66%{filter:brightness(2.2)}16%,50%,100%{filter:none}}
+#note{position:absolute;left:50%;top:calc(var(--st) + 8px);transform:translateX(-50%);width:min(560px,calc(100% - var(--sl) - var(--sr) - 120px));box-sizing:border-box;padding:6px 14px 8px;background:rgba(4,5,8,.72);border:2px solid var(--line);font-size:20px;line-height:1.15;color:var(--ink);text-align:center;text-wrap:balance;pointer-events:none;transition:opacity .8s;z-index:6}
+@media (prefers-reduced-motion: reduce){.hint,#hp,#note{transition:none}#hp.hit{animation:none}}
 </style>
 <div id="app">
   <canvas id="cv"></canvas>
@@ -65,6 +71,8 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   <div class="hint" id="hintL" hidden>WALK</div>
   <div class="hint" id="hintR" hidden>AIM</div>
   <div id="talk" hidden><b id="talkWho"></b><p id="talkText"></p><span>TAP</span></div>
+  <div id="hp" hidden><i></i><i></i><i></i></div>
+  <div id="note" hidden></div>
   <button id="pauseBtn" aria-label="Pause" hidden>II</button>
   <div id="rbtns" hidden>
     <button id="focusBtn" aria-label="Beam focus">WIDE</button>

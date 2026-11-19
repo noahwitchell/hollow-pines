@@ -43,7 +43,7 @@ const ground = new Uint32Array(GW * GH);
 const HC = 6, HGX = Math.ceil((WX1 - WX0) / HC), HGY = Math.ceil((WY1 - WY0) / HC);
 let PX = [], solidG, decorG, trees, reflectors, decoys, moons, fires, lights, logs, rocks, ferns, bushes;
 let CAR, CAMP, TENT, CAMPER, POST, BRIDGE, BARRIER, hazards;
-let FORK, BR = [], DEN, DENPROPS = [], DARK = [];
+let FORK, BR = [], DEN, DENPROPS = [], DENBLOOD = [], DARK = [], ITEMS = [];
 // stretches under thick canopy: no moonlight gets through, so with the light off you see nothing at all
 function darkAt(y) { let d = 0; for (const [a, b] of DARK) d = Math.max(d, sstep(a + 6, a - 2, y) * sstep(b - 6, b + 2, y)); return d; }
 function distBranch(x, y) {
@@ -70,7 +70,7 @@ const PAL = {
   camper: [C('#b8503a'), C('#5a2418'), C('#d9b08c'), C('#262422'), C('#e0d6c0')],
   tent: ['#4f6a52', '#3c5440', '#6b8a6c'].map(C), car: ['#6a4a3c', '#53392e', '#1d2227', '#a8b0b8'].map(C), refl: C('#cfe6f2'),
   stone: ['#7d7a72', '#5f5c56'].map(C), log: ['#5a4230', '#7c6248', '#3c2c20'].map(C), post: C('#4a3a2a'),
-  plank: ['#6e5638', '#5a452c', '#7d6442'].map(C), bone: [C('#cfc6b0'), C('#a49b86')], pack: [C('#3d5a7a'), C('#2a3f57')], torn: [C('#7a6a3a'), C('#5a4c28'), C('#1a1612')],
+  plank: ['#6e5638', '#5a452c', '#7d6442'].map(C), bone: [C('#cfc6b0'), C('#a49b86')], glassF: C('#9a9aa0'), paper: [C('#cfc5a8'), C('#6a6250')], wrap: [C('#a83a2a'), C('#d8c8a0')], pack: [C('#3d5a7a'), C('#2a3f57')], torn: [C('#7a6a3a'), C('#5a4c28'), C('#1a1612')], blood: [C('#33170f'), C('#3e120c'), C('#240806')],
   coon: ['#6b6862', '#3a3835', '#a9a59b', '#1c1b1a'].map(C), rabbit: ['#7a6650', '#5a4a3a', '#d8d0c0'].map(C), fox: ['#a8582a', '#7a3c1c', '#e8e0d0', '#2a1a12'].map(C), owl: C('#4a4036'), stripe: [C('#c8c0a8'), C('#a8432c')],
 };
 
@@ -161,6 +161,7 @@ function buildWorld(seed) {
     let x = x0, y = y0, th = Math.atan2(-1, tdx); BR = [];
     for (let i = 0; i <= 46; i++) { BR.push([x, y]); if (i > 10) th += side * 0.036; x = clamp(x + Math.cos(th), -60, 60); y += Math.sin(th); }
     FORK.x = x0; DEN = { x, y };
+    FORK.bad = BR[24][0] < pathX(BR[24][1]) ? 'left' : 'right'; // seen walking north, up the screen
   }
   DARK = [[PY0 - 58, PY0 - 98], [FORK.y + 22, FORK.y - 30]];
 
@@ -273,6 +274,13 @@ function buildWorld(seed) {
   DENPROPS = [{ k: 'tent', x: DEN.x + 1.8, y: DEN.y - 1.2, a: 0.7 }, { k: 'pack', x: DEN.x - 1.4, y: DEN.y + 0.9, a: 2.2 }];
   for (let i = 0; i < 7; i++) DENPROPS.push({ k: 'bone', x: DEN.x + (rnd() - 0.5) * 6, y: DEN.y + (rnd() - 0.5) * 5, a: rnd() * TAU, L: 0.25 + rnd() * 0.35 });
   DENPROPS.push({ k: 'ribs', x: DEN.x - 0.4, y: DEN.y - 1.6, a: rnd() * TAU });
+  { // the stains: a big one under the ribs, splashes round it, a long smear dragged off away from the path, some on the tent
+    const rb = DENPROPS[DENPROPS.length - 1], da = Math.atan2(DEN.y - FORK.y, DEN.x - FORK.x) + (rnd() - 0.5) * 0.8;
+    DENBLOOD = [{ x: rb.x, y: rb.y, r: 1.1, sx: 1.3, a: rnd() * TAU, s: rnd() * 99 }];
+    for (let i = 0; i < 5; i++) { const a = rnd() * TAU, dd = 0.9 + rnd() * 1.6; DENBLOOD.push({ x: rb.x + Math.cos(a) * dd, y: rb.y + Math.sin(a) * dd, r: 0.25 + rnd() * 0.3, sx: 1 + rnd(), a: rnd() * TAU, s: rnd() * 99 }); }
+    for (let i = 1; i <= 4; i++) DENBLOOD.push({ x: rb.x + Math.cos(da) * i * 0.9, y: rb.y + Math.sin(da) * i * 0.9, r: 0.42 - i * 0.05, sx: 2.2, a: da, s: rnd() * 99 });
+    DENBLOOD.push({ x: DEN.x + 1.6, y: DEN.y - 0.9, r: 0.45, sx: 1.6, a: 0.7, s: rnd() * 99 });
+  }
   addSolid({ t: 'prop', x: DEN.x + 1.8, y: DEN.y - 1.2, r: 0.9 });
   reflectors.push({ x: DEN.x - 1.4, y: DEN.y + 0.9, pack: true });
   for (const sg of [-1, 0, 1]) reflectors.push({ x: BARRIER.x + sg * BARRIER.w * 0.34, y: BARRIER.y - 0.12 });
@@ -281,6 +289,18 @@ function buildWorld(seed) {
     const y = PY0 - 30 - rnd() * (PY0 - PEND - 50), side2 = rnd() < 0.5 ? -1 : 1, x = pathX(y) + side2 * (3 + rnd() * 6);
     if (blocked(x, y, 0.5) || inClear(x, y)) continue;
     const o = { x, y, r: 0.6, a: rnd() * TAU, s: rnd(), decoy: true }; decoys.push(o); addDecor(o);
+  }
+  // things people dropped: small stories, a couple quietly useful. Never needed.
+  {
+    const yAt = pr => PY0 - (pr - 0.15) / 0.85 * (PY0 - PEND);
+    const beside = (y, off) => { for (let i = 0; i < 20; i++) { const sg = (i & 1) ? -1 : 1, x = pathX(y) + sg * (off + i * 0.15), yy = y - i * 0.3; if (!blocked(x, yy, 0.35)) return [x, yy]; } return [pathX(y), y]; };
+    const g = beside(yAt(0.28), 1.6), m = beside(FORK.y + 30, 1.3);
+    ITEMS = [
+      { k: 'glasses', x: g[0], y: g[1], r: 1.0, a: rnd() * TAU },
+      { k: 'map', x: m[0], y: m[1], r: 1.0, a: rnd() * TAU },
+      { k: 'notebook', x: DEN.x - 1.4, y: DEN.y + 0.9, r: 1.1, hidden: true },
+      { k: 'candy', x: DEN.x + 1.8 + Math.cos(0.7 + Math.PI / 2) * 1.05, y: DEN.y - 1.2 + Math.sin(0.7 + Math.PI / 2) * 1.05, r: 1.0, a: 0.7 },
+    ];
   }
   for (const f of fires) { f.sd0 = new Float32Array(FNB).fill(1e9); f.sr0 = new Float32Array(FNB); f.sd = new Float32Array(FNB); f.sr = new Float32Array(FNB); near(solidG, f.x, f.y, f.r + 1, o => { if (o.t === 'tree' || o.t === 'rock' && o.r >= 0.45 || o.t === 'prop' && !o.low) occlude(f.sd0, f.sr0, f.x, f.y, o.x, o.y, o.r, f.r + 1); }); }
   bakeGround();
@@ -341,12 +361,13 @@ function bakeGround() {
 }
 
 // ---------------- state ----------------
-const P = { x: 0, y: 6, aim: -Math.PI / 2, aimT: -Math.PI / 2, vx: 0, vy: 0, stam: 1, mode: 'still', noise: 0, stepT: 0, moving: false, inBush: false, face: -Math.PI / 2 };
+const HPMAX = 3;
+const P = { hp: HPMAX, hurtT: 9, stun: 0, items: {}, x: 0, y: 6, aim: -Math.PI / 2, aimT: -Math.PI / 2, vx: 0, vy: 0, stam: 1, mode: 'still', noise: 0, stepT: 0, moving: false, inBush: false, face: -Math.PI / 2 };
 const bat = { c: 1, r: 1, dead: false, force: 0, nextFl: 40, flT: 0, plant: false };
 const beam = { out: 1, hw: 0.52, R: 10.5, tr: 1, tg: 0.92, tb: 0.74, cosO: 0 };
 const CR = { x: 1e6, y: 1e6, a: 0, st: 'away', t: 0, v: 0, eyes: false, A: 0, unlit: 0, prev: '', lx: 0, ly: 0, tx: 0, ty: 0, dur: 0, rad: 14, dir: 1, nextSnd: 0, nextBr: 0, lit: 0, lost: 0, fire: null, hunting: false, seen: 0, stung: false, eyeP: null, ph: 0, mv: 0, lastX: null, lastY: null, seed: null };
 const DEER = { on: false, x: 0, y: 0, a: 0, st: 'watch', t: 0, litT: 0, stepT: 0 };
-const D = { t: 0, phase: 'off', pt: 0, pdur: 0, lvl: 0, falseT: -1, flash: 0, lastOff: -9, sightings: 0, encounters: 0, saves: 0, deaths: 0, amb: 20, mute: 0 };
+const D = { t: 0, phase: 'off', pt: 0, pdur: 0, lvl: 0, falseT: -1, flash: 0, lastOff: -9, sightings: 0, encounters: 0, saves: 0, deaths: 0, hits: 0, lastHit: -99, hush: 0, amb: 20, mute: 0 };
 let lightOn = true, narrow = false, adapt = 0, fear = 0.05, shake = 0, cam = { x: 0, y: 2 }, tNow = 0;
 let fadeIn = 0, mode = 'title', runSeed = 1, runTime = 0, deathT = 0, ripples = [], soundOn = true, wonT = 0, bestStats = null;
 const sd = new Float32Array(1024), sr = new Float32Array(1024), NB = 1024;
@@ -427,6 +448,17 @@ const snd = {
   thump(x, y) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1); tn(b, t, 0.08, 90, 'sine', 0.3, 50); tn(b, t + 0.13, 0.08, 85, 'sine', 0.22, 50); },
   bark(x, y) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1.4); nz(b, t, 0.16, 1100, 1.2, 0.35, 'bandpass', 700, 0.01); tn(b, t, 0.15, 620, 'sawtooth', 0.06, 380, 0.01); },
   flap(x, y) { if (!snd.ok()) return; const t = AC.currentTime, b = bus(x, y, 1.2); nz(b, t, 0.12, 320, 0.7, 0.25, 'lowpass', 0, 0.03); },
+  hit() { // the blow: a heavy thump, a tear of noise, your own gasp
+    if (!snd.ok()) return; const t = AC.currentTime, b = bus(null, null, 1.6);
+    tn(b, t, 0.22, 90, 'sine', 0.7, 34, 0.004); nz(b, t, 0.18, 1500, 0.5, 0.7, 'bandpass', 500, 0.003); nz(b, t + 0.02, 0.35, 3200, 0.7, 0.25, 'highpass', 0, 0.01);
+    const s = AC.createBufferSource(); s.buffer = noiseBuf; const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.5; f.frequency.setValueAtTime(1300, t + 0.12); f.frequency.linearRampToValueAtTime(700, t + 0.6); const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t + 0.12); g.gain.linearRampToValueAtTime(0.35, t + 0.18); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7); s.connect(f).connect(g).connect(b); s.start(t + 0.12, Math.random()); s.stop(t + 0.75);
+  },
+  rush(x, y) { // something big coming fast through the undergrowth
+    if (!snd.ok()) return; for (let i = 0; i < 5; i++) setTimeout(() => { if (snd.ok()) { const a = CR.st !== 'away' ? CR : { x, y }; snd.rustle(a.x, a.y, 0.9); } }, i * 90);
+    const t = AC.currentTime, b = bus(x, y, 1.8); tn(b, t, 0.5, 62, 'sawtooth', 0.22, 48, 0.05); nz(b, t, 0.5, 420, 0.8, 0.35, 'lowpass', 0, 0.08);
+  },
+  heal() { if (!snd.ok()) return; const t = AC.currentTime, b = bus(null, null, 1); [330, 415, 494].forEach((f, i) => tn(b, t + i * 0.12, 0.9, f, 'triangle', 0.035, 0, 0.08)); },
+  pick() { if (!snd.ok()) return; const t = AC.currentTime, b = bus(null, null, 1); nz(b, t, 0.12, 2400, 0.6, 0.12, 'bandpass', 0, 0.02); nz(b, t + 0.1, 0.1, 3200, 0.6, 0.08, 'bandpass', 0, 0.02); tn(b, t + 0.05, 0.25, 660, 'triangle', 0.02); },
   win() { if (!snd.ok()) return; const t = AC.currentTime, b = bus(null, null, 1); [220, 277, 330, 440].forEach((f, i) => tn(b, t + i * 0.25, 2.6, f, 'triangle', 0.06, 0, 0.3)); },
   caught() { if (!snd.ok()) return; const t = AC.currentTime, b = bus(null, null, 1.2); nz(b, t, 1.2, 900, 0.5, 0.8, 'bandpass', 200, 0.005); tn(b, t, 1.4, 70, 'sawtooth', 0.4, 30, 0.005); tn(b, t, 0.9, 1480, 'square', 0.05, 600, 0.005); },
 };
@@ -562,6 +594,8 @@ function updatePlayer(dt) {
   if (m > 0.12) { if (m < 0.5) { sp = lerp(0.6, 1.0, (m - 0.12) / 0.38); md = 'sneak'; } else if (m < 0.96 || P.stam <= 0.02) { sp = lerp(1.45, 1.9, clamp((m - 0.5) / 0.4, 0, 1)); md = 'walk'; } else { sp = 4.0; md = 'run'; } }
   P.inBush = inBush(P.x, P.y);
   if (P.inBush) sp *= 0.55;
+  if (P.stun > 0) { P.stun -= dt; sp *= 0.35; if (md === 'run') md = 'walk'; }
+  P.hurtT += dt;
   if (md === 'run') P.stam = Math.max(0, P.stam - dt / 12); else P.stam = Math.min(1, P.stam + dt / (md === 'still' ? 6 : 9));
   if (P.stam < 0.4 && md !== 'run' && tNow > (P.nextPant || 0)) { snd.breath(P.x, P.y, 0.12 + (0.4 - P.stam) * 0.5); P.nextPant = tNow + 1.1 + P.stam * 2; } // out of breath
   const k = 1 - Math.exp(-dt * 10);
@@ -741,7 +775,7 @@ function updateCreature(dt) {
     if (CR.eyesShut && CR.litT > 0.5) CR.eyesShut = false; // it opens its eyes
   }
   if (CR.st === 'stare' && CR.press > CR.tol) react(pickReaction(false));
-  if (safeFire(P.x, P.y, 1) && CR.st !== 'flee' && CR.st !== 'tease') { react(R() < 0.5 ? 'run' : 'back'); }
+  if (safeFire(P.x, P.y, 1) && CR.st !== 'flee' && CR.st !== 'tease' && CR.st !== 'ambush') { react(R() < 0.5 ? 'run' : 'back'); }
   const tell = () => { if (d < 6 && CR.t > CR.nextBr) { snd.breath(CR.x, CR.y, 0.32); CR.nextBr = CR.t + 1.8 + R(); fear = Math.max(fear, 0.7); } };
   switch (CR.st) {
     case 'tease': // the first time: it stands where the road used to be, and then it is gone
@@ -805,11 +839,18 @@ function updateCreature(dt) {
       if ((d > 30 && beamAt(CR.x, CR.y, 1.6) < 0.01) || CR.t > 9) crGone();
       break;
     }
+    case 'ambush': { // the one you can't stop: out of the dark behind you, flat out, and it doesn't care about the light
+      CR.fours = true; CR.eyes = true;
+      const dx = P.x - CR.x, dy = P.y - CR.y, q = Math.hypot(dx, dy), s = Math.min(q, 10.5 * dt);
+      if (q > 0.01) { CR.x += dx / q * s; CR.y += dy / q * s; CR.a = Math.atan2(dy, dx); }
+      if (q < 0.8 || CR.t > 1.6) { CR.fours = false; hurt(CR.x, CR.y); snd.shriek(CR.x, CR.y); setPhase('enc'); CR.lastR = null; react('run'); CR.eyes = true; S.amb = 2; }
+      break;
+    }
     case 'lunge': { // it's on you. Get the light on it and it recoils; if not, that's it.
       CR.v = Math.min(6, CR.v + dt * 30);
       moveTo(CR, P.x, P.y, CR.v, dt); CR.fours = true;
       if (isLit && CR.t > 0.05) { CR.fours = false; spotted(0); shake = 1; snd.shriek(CR.x, CR.y); D.saves++; CR.lastR = null; react(R() < 0.5 ? 'bolt' : 'run'); break; }
-      if (crDist() < 0.85) { CR.fours = false; caught(); }
+      if (crDist() < 0.85) { CR.fours = false; if (P.hp > 1) { hurt(CR.x, CR.y); react('run'); } else caught(); }
       else if (CR.t > 1.2) { CR.fours = false; react('back'); }
       break;
     }
@@ -826,6 +867,29 @@ function caught() {
   const a = Math.atan2(CR.y - P.y, CR.x - P.x); P.aim = a; beam.aim = a; CR.x = P.x + Math.cos(a) * 0.95; CR.y = P.y + Math.sin(a) * 0.95; CR.a = a + Math.PI;
 }
 
+// it hurts you: knocked sideways, the light jumps, the world goes red for a beat. No limp; you can still get away.
+function hurt(x, y) {
+  P.hp = Math.max(1, P.hp - 1); D.hits++; D.lastHit = runTime; P.hurtT = 0; P.stun = 0.75;
+  snd.hit(); shake = 1.5; fear = 1; pulseVig(1.25);
+  const a = Math.atan2(P.y - y, P.x - x); P.vx = Math.cos(a) * 6; P.vy = Math.sin(a) * 6; P.aim = wrapA(P.aim + (R() - 0.5) * 0.9);
+  if (lightOn) bat.flT = Math.max(bat.flT, 0.45);
+  try { navigator.vibrate && navigator.vibrate([80, 50, 160]); } catch (e) {}
+  syncHP(true);
+  if (P.items.candy === 1) P.eatAt = runTime + 9 + R() * 4; // the candy bar in your pocket, once things settle
+}
+function heal(n) {
+  if (P.hp >= HPMAX) return; P.hp = Math.min(HPMAX, P.hp + n); snd.heal(); syncHP(true);
+}
+const hpEl = $('hp');
+function syncHP(flash) {
+  const segs = hpEl.children;
+  for (let i = 0; i < segs.length; i++) segs[i].className = i < P.hp ? '' : 'gone';
+  const show = P.hp < HPMAX && (mode === 'play' || mode === 'talk' || mode === 'dying');
+  if (show) { hpEl.hidden = false; hpEl.style.opacity = '1'; }
+  else if (!hpEl.hidden && P.hp >= HPMAX && flash) { hpEl.style.opacity = '1'; setTimeout(() => { if (P.hp >= HPMAX) hpEl.style.opacity = '0'; }, 2600); setTimeout(() => { if (P.hp >= HPMAX) hpEl.hidden = true; }, 3400); }
+  else if (!show) hpEl.hidden = true;
+  if (flash) { hpEl.classList.remove('hit'); void hpEl.offsetWidth; hpEl.classList.add('hit'); }
+}
 function spawnDeer(dd = 18 + R() * 7, quiet = true) {
   const a = (beam.out > 0.2 ? beam.aim : P.face) + (R() - 0.5) * 0.4;
   const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd, 0.6); if (!p) return;
@@ -909,6 +973,24 @@ function story(dt) {
   }
   // checkpoints along the path, when it's quiet
   if (S.follow && S.phase === 'path') { const pr = progress(); for (const c of [0.38, 0.62, 0.82]) if (pr > c && (S.cpAt || 0) < c && (D.phase === 'calm' || CR.st === 'away')) { S.cpAt = c; checkpoint(); } }
+  // the attack: once, mid-woods, when it's been quiet a while. The crickets cut out, a snap behind you, then it's on you from the dark.
+  if (S.follow && !S.amb && progress() > 0.43 && D.phase === 'calm' && D.pt > 6 && CR.st === 'away' && !DEER.on && Math.hypot(P.x - DEN.x, P.y - DEN.y) > 18) {
+    if (P.hp < HPMAX || progress() > 0.8) S.amb = 2; // already hurt, or too late: skip it
+    else { S.amb = 1; S.ambT = 0; D.hush = 2.4; }
+  }
+  if (S.follow && !S.amb && progress() > 0.8) S.amb = 2;
+  if (S.amb === 1) {
+    S.ambT += dt;
+    if (S.ambT > 0.9 && !S.ambSnap) { S.ambSnap = true; const ba = beam.aim + Math.PI; snd.twig(P.x + Math.cos(ba) * 7, P.y + Math.sin(ba) * 7, 1.4); fear = Math.max(fear, 0.6); }
+    if (S.ambT > 2.2 && CR.st === 'away') {
+      let p = null; // from behind, wherever the light isn't, with a clear run at you
+      for (let i = 0; i < 12 && !p; i++) { const a = beam.aim + Math.PI + (i ? (R() - 0.5) * 2 : 0), dd = 5.5 + R(), x = P.x + Math.cos(a) * dd, y = P.y + Math.sin(a) * dd; if (!blocked(x, y, 0.4) && losClear(x, y, P.x, P.y) && beamAt(x, y, 1.3) < 0.02) p = [x, y]; }
+      if (p) { placeCr(p, 'ambush'); CR.eyes = true; snd.rush(p[0], p[1]); S.amb = 1.5; }
+      else if (S.ambT > 6) S.amb = 2;
+    }
+  }
+  // the candy bar, eaten once it's quiet again
+  if (P.eatAt && runTime > P.eatAt && P.hp < HPMAX && (CR.st === 'away' || D.phase === 'calm')) { P.eatAt = 0; P.items.candy = 2; heal(1); note('You eat the candy bar. Your hands stop shaking.'); }
   // 3. halfway: a deer, close, to make you jump
   if (S.follow && !S.deer && progress() > 0.5 && CR.st === 'away') { S.deer = true; spawnDeer(11 + R() * 3, false); }
   // 4. near the camp: it is standing beside the path ahead, between you and the fire, eyes shut
@@ -931,15 +1013,49 @@ function story(dt) {
     S.phase = 'camp'; S.follow = false; setPhase('off');
     if (CR.st !== 'away' && CR.st !== 'flee') react('run');
   }
-  if (S.phase === 'camp' && !S.talked && Math.hypot(P.x - CAMPER.x, P.y - CAMPER.y) < 3.4) { S.talked = true; startTalk(CAMPER_LINES, endChapter); }
+  if (S.phase === 'camp' && !S.talked && Math.hypot(P.x - CAMPER.x, P.y - CAMPER.y) < 3.4) { S.talked = true; startTalk(camperLines(), endChapter); }
+}
+// ---------------- found things ----------------
+const noteEl = $('note'); let noteQ = [], noteT = 0;
+function note(txt) { noteQ.push(txt); if (noteQ.length === 1) showNote(); }
+function showNote() { noteEl.textContent = noteQ[0]; noteEl.hidden = false; noteEl.style.opacity = '1'; noteT = 4.2 + noteQ[0].length * 0.045; }
+function noteTick(dt) {
+  if (!noteQ.length) return; noteT -= dt;
+  if (noteT < 0.8) noteEl.style.opacity = '0';
+  if (noteT <= 0) { noteQ.shift(); if (noteQ.length) showNote(); else noteEl.hidden = true; }
+}
+const ITEM_TEXT = {
+  glasses: () => ['A pair of wire glasses in the needles. One lens is cracked.'],
+  map: () => [`A torn page from a trail map, soaked through. Someone has scribbled over the ${FORK.bad} fork: NO.`],
+  notebook: () => ['A notebook in the pack. Inside the cover: D. MARSH.', 'The last page: "It keeps pace with me off the trail. When I put the light on it, it goes. It always comes back closer."'],
+  candy: () => P.hp < HPMAX ? ['A candy bar by the torn tent, still wrapped.', 'You eat it. Your hands stop shaking.'] : ['A candy bar by the torn tent, still wrapped. You pocket it.'],
+};
+function updateItems() {
+  for (const it of ITEMS) {
+    if (it.taken || Math.hypot(P.x - it.x, P.y - it.y) > it.r) continue;
+    it.taken = true; snd.pick(); for (const t of ITEM_TEXT[it.k]()) note(t);
+    if (it.k === 'candy') { if (P.hp < HPMAX) { P.items.candy = 2; heal(1); } else P.items.candy = 1; }
+    else P.items[it.k] = 1;
+  }
+}
+function drawItems() {
+  for (const it of ITEMS) {
+    if (it.taken || it.hidden) continue;
+    const [sx, sy] = s2(it.x, it.y); if (!onScr(sx, sy, 4)) continue; const ca = Math.cos(it.a), sa = Math.sin(it.a);
+    if (it.k === 'glasses') { for (const sg of [-1, 1]) disc(sx + ca * sg * 1.3, sy + sa * sg * 1.3, 0.9, PAL.glassF); line(sx - ca * 0.4, sy - sa * 0.4, sx + ca * 0.4, sy + sa * 0.4, PAL.glassF); }
+    else if (it.k === 'map') rect(sx, sy, it.a, 2.2, 1.6, (u, v) => Math.abs(u + v * 0.3) < 0.12 ? PAL.paper[1] : PAL.paper[0]);
+    else if (it.k === 'candy') rect(sx, sy, it.a, 1.8, 0.8, (u) => Math.abs(u) > 0.7 ? PAL.wrap[1] : PAL.wrap[0]);
+  }
 }
 // ---------------- checkpoints ----------------
 let CP = null;
-function checkpoint() { CP = { x: P.x, y: P.y, face: P.face, aim: P.aim, lvl: D.lvl, S: Object.assign({}, S), crit: critT }; }
+function checkpoint() { CP = { x: P.x, y: P.y, face: P.face, aim: P.aim, lvl: D.lvl, S: Object.assign({}, S), crit: critT, hp: P.hp, items: Object.assign({}, P.items) }; }
 function respawn() {
   if (!CP) { start(); return; }
   Object.assign(P, { x: CP.x, y: CP.y, aim: CP.aim, aimT: CP.aim, face: CP.face, vx: 0, vy: 0, stam: 1, mode: 'still' });
   Object.assign(S, CP.S); S.denBehind = S.denBehind || S.den; // the den only does that once
+  if (S.amb && S.amb < 2) S.amb = 2;
+  P.hp = Math.max(CP.hp, 2); P.items = Object.assign({}, CP.items); for (const it of ITEMS) it.taken = !!P.items[it.k]; P.stun = 0; P.eatAt = P.items.candy === 1 && P.hp < HPMAX ? runTime + 4 : 0; syncHP(false);
   CR.st = 'away'; CR.x = CR.y = 1e6; CR.eyes = false; CR.eyesShut = false; CR.lastR = null; CR.fours = false; DEER.on = false; critters = []; owl = null;
   D.lvl = Math.max(0, CP.lvl - 0.25); D.mute = 0; fear = 0.1; lightOn = true; syncBtns();
   if (S.follow && S.phase === 'path') { setPhase('calm', 38 + R() * 14); D.falseT = -1; } else setPhase('off'); // a proper breather after it gets you
@@ -952,7 +1068,8 @@ function setPhase(ph, dur = 0) { D.phase = ph; D.pt = 0; D.pdur = dur; }
 function endEncounter() {
   if (!S.follow || S.phase !== 'path') { setPhase('off'); return; }
   D.lvl = clamp(D.lvl + (CR.sd > 14 ? 0.1 : 0.2), 0, 1);
-  setPhase('calm', 18 + R() * 16); D.falseT = R() < 0.75 ? 7 + R() * (D.pdur - 12) : -1;
+  const hurtNow = runTime - D.lastHit < 20;
+  setPhase('calm', hurtNow ? 34 + R() * 12 : 18 + R() * 16); D.falseT = !hurtNow && R() < 0.75 ? 7 + R() * (D.pdur - 12) : -1;
 }
 function startUneasy() {
   const p = darkSpot(28); if (!p) return false;
@@ -990,20 +1107,21 @@ function director(dt) {
   if (CR.st !== 'away') {
     const d = crDist();
     mt = CR.st === 'lurk' ? 0.55 : CR.st === 'tease' ? 0.6 : CR.st === 'flee' ? 0.35 : Math.max(0.8, sstep(20, 8, d));
-    if (CR.st === 'lunge' || mode === 'dying') mt = 1;
+    if (CR.st === 'lunge' || CR.st === 'ambush' || mode === 'dying') mt = 1;
   }
-  D.mute += (mt - D.mute) * Math.min(1, dt * (mt > D.mute ? 0.7 : 0.2));
+  if (D.hush > 0) { D.hush -= dt; mt = 1; }
+  D.mute += (mt - D.mute) * Math.min(1, dt * (mt > D.mute ? (D.hush > 0 ? 3 : 0.7) : 0.2));
   // now and then, a far-off owl
   D.amb -= dt;
   if (D.amb <= 0) { D.amb = 35 + R() * 40; const a = R() * TAU, r = 22 + R() * 12; snd.owl(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r); }
   if (!S.follow || S.phase !== 'path' || D.phase === 'off') return;
   D.pt += dt;
   if (D.phase === 'calm') {
-    if (CR.st !== 'away' && CR.st !== 'flee' && CR.st !== 'tease') { setPhase('enc'); return; }
+    if (CR.st !== 'away' && CR.st !== 'flee' && CR.st !== 'tease' && CR.st !== 'ambush') { setPhase('enc'); return; }
     D.lvl = Math.max(0, D.lvl - dt * 0.002);
     if (P.mode === 'run') D.pt += dt * 0.5; // running through the woods draws it sooner
     if (D.falseT > 0 && D.pt > D.falseT) { D.falseT = -1; falseAlarm(); }
-    if (D.pt > D.pdur && CR.st === 'away') { if (!startUneasy()) D.pdur += 3; }
+    if (D.pt > D.pdur && CR.st === 'away' && !(S.amb !== 2 && progress() > 0.43)) { if (!startUneasy()) D.pdur += 3; } // the attack is due: keep it quiet until it comes
   } else if (D.phase === 'uneasy') {
     if (CR.st === 'away') { setPhase('calm', 10); return; }
     if (CR.st === 'lurk' && D.pt > D.pdur) startEncounter();
@@ -1017,7 +1135,7 @@ function updateFear(dt) {
   if (CR.st !== 'away') {
     const d = crDist();
     if (CR.st === 'creep' || CR.st === 'stare' || CR.st === 'shadow') target = Math.max(target, sstep(18, 3, d) * 0.85);
-    if (CR.st === 'lunge') target = 1;
+    if (CR.st === 'lunge' || CR.st === 'ambush') target = 1;
   }
   fear += (target - fear) * Math.min(1, dt * (target > fear ? 2 : 0.12));
 }
@@ -1028,6 +1146,7 @@ function update(dt) {
   updateBattery(dt);
   buildShadows();
   story(dt);
+  updateItems();
   if (mode !== 'play') return;
   director(dt);
   updateCreature(dt);
@@ -1046,6 +1165,18 @@ const CAMPER_LINES = [
   ['Camper', 'There\'s a ranger station up the trail. Couple miles. They\'ll have a radio, a landline, something.'],
   ['Camper', 'I\'m not leaving this fire. And you... don\'t stay out there any longer than you have to.'],
 ];
+function camperLines() {
+  const L = CAMPER_LINES, out = [L[0], L[1]], it = P.items;
+  if (P.hp < HPMAX) out.push(['Camper', 'You\'re bleeding. Did it... no. Don\'t tell me. Hold still.'], ['Camper', 'First aid kit. It\'s not much, but it\'ll hold.', () => heal(HPMAX)]);
+  out.push(L[2], L[3], L[4]);
+  if (it.notebook) {
+    out.push(['Camper', 'D. Marsh... Dana? She came through here two days ago. Said she was meeting her brother at the ranger station.' + (it.glasses ? ' Those are her glasses, too.' : '')]);
+    out.push(['Camper', 'She wrote that? ... She was fine when she left here. She was fine.']);
+  } else if (it.glasses) out.push(['Camper', 'Wire glasses, cracked? A hiker came through here two days ago with glasses like that. Dana. She was headed for the ranger station.']);
+  if (it.candy === 1) out.push(['Camper', 'Eat that candy bar, by the way. You look terrible.', () => { P.items.candy = 2; }]);
+  out.push(L[5], L[6]);
+  return out;
+}
 let talk = null;
 const talkEl = $('talk'), talkWho = $('talkWho'), talkText = $('talkText');
 function startTalk(lines, done) {
@@ -1054,7 +1185,7 @@ function startTalk(lines, done) {
   if (CR.st !== 'away') { CR.st = 'away'; CR.x = CR.y = 1e6; }
   hud(false); showLine();
 }
-function showLine() { const [who] = talk.lines[talk.i]; talkWho.textContent = who; talkText.textContent = ''; talk.n = 0; talkEl.hidden = false; }
+function showLine() { const [who, , fn] = talk.lines[talk.i]; if (fn) fn(); talkWho.textContent = who; talkText.textContent = ''; talk.n = 0; talkEl.hidden = false; }
 function typeTalk(dt) { // the words come out a little at a time, with a soft murmur
   if (!talk) return; const txt = talk.lines[talk.i][1]; if (talk.n >= txt.length) return;
   const was = talk.n | 0; talk.n = Math.min(txt.length, talk.n + dt * 38); const now = talk.n | 0;
@@ -1313,6 +1444,19 @@ function drawProps() {
   { const [sx, sy] = s2(CAR.x, CAR.y); if (onScr(sx, sy, 30)) rect(sx, sy, CAR.a, CAR.w / 2 * PPM, CAR.h / 2 * PPM, (u, v) => (Math.abs(u) > 0.93 ? PAL.car[1] : (u > -0.35 && u < 0.45 ? (Math.abs(v) < 0.8 ? PAL.car[2] : PAL.car[0]) : (Math.abs(v) > 0.88 ? PAL.car[1] : PAL.car[0])))); }
   { const [sx, sy] = s2(BARRIER.x, BARRIER.y); if (onScr(sx, sy, 30)) { for (const sg of [-1, 1]) disc(sx + sg * BARRIER.w * 0.42 * PPM, sy, 1.4, PAL.post); rect(sx, sy, 0, BARRIER.w / 2 * PPM, 0.16 * PPM, (u) => PAL.stripe[Math.floor((u + 1) * 5) % 2]); } }
   { const [sx, sy] = s2(POST.x, POST.y); if (onScr(sx, sy, 6)) disc(sx, sy, 1.3, PAL.post); }
+  // dried blood at the den: stains soaked into the ground round the carcass, a drag mark off into the trees
+  for (const b of DENBLOOD) {
+    const [sx, sy] = s2(b.x, b.y), rp = b.r * PPM; if (!onScr(sx, sy, rp + 4)) continue;
+    const x0 = Math.max(0, sx - rp - 2 | 0), x1 = Math.min(W - 1, sx + rp + 2 | 0), y0 = Math.max(0, sy - rp - 2 | 0), y1 = Math.min(H - 1, sy + rp + 2 | 0);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const wx = camX + (x - W / 2) / PPM, wy = camY + (y - H / 2) / PPM, dx = (wx - b.x) / b.r, dy = (wy - b.y) / b.r;
+      const u = dx * Math.cos(b.a) + dy * Math.sin(b.a), v = -dx * Math.sin(b.a) + dy * Math.cos(b.a), q = Math.hypot(u / b.sx, v);
+      const n = vnoise(wx * 2.6 + b.s, wy * 2.6) * 0.6 + vnoise(wx * 7 + b.s, wy * 7 - b.s) * 0.4;
+      const m = (1 - q) * 1.3 + (n - 0.5) * 1.1; if (m <= 0) continue;
+      put(y * W + x, m > 0.55 ? PAL.blood[2] : m > 0.25 ? PAL.blood[1] : PAL.blood[0]);
+    }
+  }
+  drawItems();
   for (const d of DENPROPS) {
     const [sx, sy] = s2(d.x, d.y); if (!onScr(sx, sy, 16)) continue; const ca = Math.cos(d.a), sa = Math.sin(d.a);
     if (d.k === 'tent') rect(sx, sy, d.a, 1.2 * PPM, 0.85 * PPM, (u, v) => (Math.abs(u - 0.2 + v * 0.3) < 0.12 && v > -0.6) ? PAL.torn[2] : (v < 0 ? PAL.torn[0] : PAL.torn[1])); // slashed open
@@ -1509,6 +1653,15 @@ function overlays() {
     const [sx, sy] = s2(rf.x, rf.y), v = clamp(I * 3, 0, 1);
     px1(sx, sy, 215, 240, 255, v); px1(sx + 1, sy, 215, 240, 255, v * 0.8); px1(sx, sy - 1, 215, 240, 255, v * 0.8); px1(sx - 1, sy, 160, 200, 230, v * 0.4); px1(sx, sy + 1, 160, 200, 230, v * 0.4);
   }
+  for (const it of ITEMS) if (it.k === 'glasses' && !it.taken) { const I = beamAt(it.x, it.y, 2.2); if (I > 0.03) { const [sx, sy] = s2(it.x + Math.cos(it.a) * 0.14, it.y + Math.sin(it.a) * 0.14); px1(sx, sy, 230, 240, 250, clamp(I * 2.2, 0, 0.9)); } }
+  // the blow: the world goes red for a moment
+  if (P.hurtT < 0.6 && mode === 'play') { // red bleeds in from the edges, hardest at the moment of the blow
+    const base = Math.pow(1 - P.hurtT / 0.6, 1.5);
+    for (let y = 0, i = 0; y < H; y++) { const ey = (y / H - 0.5) * 2; for (let x = 0; x < W; x++, i++) {
+      const ex = (x / W - 0.5) * 2, e = Math.min(1, (ex * ex * 0.6 + ey * ey) * 0.75), k = base * (0.25 + 0.75 * e) * 0.85;
+      const c = out32[i], r = c & 255, g = c >> 8 & 255, b = c >> 16 & 255;
+      out32[i] = (0xff000000 | (b * (1 - k * 0.9) | 0) << 16 | (g * (1 - k * 0.9) | 0) << 8 | (r * (1 - k) + 110 * k | 0)) >>> 0;
+    } } }
   // the car's hazards
   if ((tNow % 1.1) < 0.55) for (const h of hazards) { const [sx, sy] = s2(h.x, h.y); if (onScr(sx, sy, 2)) { px1(sx, sy, 255, 170, 60, 1); px1(sx + 1, sy, 255, 130, 30, 0.7); } }
   // firelight is always visible
@@ -1628,7 +1781,7 @@ function paintFace() {
 const card = $('card'), box = card.querySelector('.box');
 function showCard(html, solid) { box.innerHTML = html; card.hidden = false; card.classList.toggle('solid', !!solid); hud(false); }
 function hideCard() { card.hidden = true; }
-function hud(on) { $('pauseBtn').hidden = !on; $('rbtns').hidden = !on; }
+function hud(on) { $('pauseBtn').hidden = !on; $('rbtns').hidden = !on; if (typeof syncHP === 'function') syncHP(false); }
 function btn(label, fn, primary) { const b = document.createElement('button'); b.textContent = label; if (primary) b.className = 'primary'; b.addEventListener('click', e => { e.stopPropagation(); initAudio(); fn(); }); return b; }
 function row(...bs) { const r = document.createElement('div'); r.className = 'row'; bs.forEach(b => r.appendChild(b)); box.appendChild(r); }
 const HOWTO = `<ul>
@@ -1651,7 +1804,8 @@ function resetRun() {
   Object.assign(P, { x: CAR.x - 1.7, y: CAR.y - 0.4, aim: -Math.PI / 2, aimT: -Math.PI / 2, vx: 0, vy: 0, stam: 1, mode: 'still', face: -Math.PI / 2 });
   Object.assign(bat, { c: 1, r: 1, dead: false, force: 0, nextFl: 35 + R() * 30, flT: 0, plant: false });
   Object.assign(D, { t: 0, phase: 'off', pt: 0, pdur: 0, lvl: 0, falseT: -1, flash: 0, lastOff: -9, sightings: 0, encounters: 0, saves: 0, deaths: 0, amb: 25, mute: 0 }); CP = null;
-  Object.assign(S, { phase: 'road', follow: false, teased: false, deer: false, posed: false, talked: false, den: false, denT: 0, denBehind: false }); critters = []; owl = null; critT = 14;
+  Object.assign(P, { hp: HPMAX, hurtT: 9, stun: 0, items: {}, eatAt: 0 }); D.hits = 0; D.lastHit = -99; D.hush = 0; noteQ = []; noteEl.hidden = true;
+  Object.assign(S, { phase: 'road', follow: false, teased: false, deer: false, posed: false, talked: false, den: false, denT: 0, denBehind: false, amb: 0, ambT: 0, ambSnap: false, cpPost: false, cpAt: 0 }); critters = []; owl = null; critT = 14;
   CR.st = 'away'; CR.lastR = null; CR.fours = false; CR.eyesShut = false; CR.x = CR.y = 1e6; CR.eyeP = null; DEER.on = false; ripples = []; talk = null; talkEl.hidden = true;
   lightOn = true; narrow = false; fear = 0.05; runTime = 0; wonT = 0; adapt = 0; cam.x = P.x; cam.y = P.y - 3; syncBtns();
 }
@@ -1691,6 +1845,7 @@ function step(dt) {
   else if (mode === 'title') { P.aim = -Math.PI / 2 + Math.sin(tNow * 0.35) * 0.9; P.aimT = P.aim; lightOn = true; updateBattery(dt); bat.c = 1; buildShadows(); }
   else if (mode === 'dying') { deathT += dt; beam.out = deathT < 1.25 ? 1 : 0; beam.hw = 0.6; beam.R = 9; beam.cosO = Math.cos(0.84); beam.aim = P.aim; buildShadows(); if (deathT > 2.6) respawn(); }
   else if (mode === 'chapter') { wonT += dt; if (wonT > 2.4 && card.hidden) chapterCard(); }
+  noteTick(dt);
   for (const rp of ripples) rp.t += dt; ripples = ripples.filter(r => r.t < 0.7);
   audioTick(dt);
   render(dt);
@@ -1702,4 +1857,4 @@ setTimeout(() => {
   P.x = CAR.x - 1.7; P.y = CAR.y - 0.4; cam.x = P.x; cam.y = P.y - 6; mode = 'title'; title();
   requestAnimationFrame(frame);
 }, 30);
-window.HP = { keys, get cam() { return cam; }, HOLD, toggleLight, get lightOn() { return lightOn; }, P, CR, D, S, bat, beam, DEER, get adapt() { return adapt; }, set adapt(v) { adapt = v; }, get mode() { return mode; }, set mode(v) { mode = v; }, hideCard, resume, start, step, update, render, startUneasy, startEncounter, react, setPhase, checkpoint, respawn, get CP() { return CP; }, get critters() { return critters; }, pathX, roadX, spawnDeer, nextLine, get talk() { return talk; }, get fires() { return fires; }, get CAMP() { return CAMP; }, get CAMPER() { return CAMPER; }, get BRIDGE() { return BRIDGE; }, get CAR() { return CAR; }, PEND, PY0, CREEKY };
+window.HP = { hurt, heal, note, get ITEMS() { return ITEMS; }, get DEN() { return DEN; }, get FORK() { return FORK; }, progress, keys, get cam() { return cam; }, HOLD, toggleLight, get lightOn() { return lightOn; }, P, CR, D, S, bat, beam, DEER, get adapt() { return adapt; }, set adapt(v) { adapt = v; }, get mode() { return mode; }, set mode(v) { mode = v; }, hideCard, resume, start, step, update, render, startUneasy, startEncounter, react, setPhase, checkpoint, respawn, get CP() { return CP; }, get critters() { return critters; }, pathX, roadX, spawnDeer, nextLine, get talk() { return talk; }, get fires() { return fires; }, get CAMP() { return CAMP; }, get CAMPER() { return CAMPER; }, get BRIDGE() { return BRIDGE; }, get CAR() { return CAR; }, PEND, PY0, CREEKY };
