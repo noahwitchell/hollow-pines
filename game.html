@@ -1628,7 +1628,7 @@ function drawCatchFace(ox, oy) {
 }
 function paintFace() {
   const ox = 0, oy = 0, cx = W / 2 + ox, cy = H / 2 + oy, Sx = H * 0.52, Sy = H * 0.52;
-  const eyes = [[-0.36, -0.3], [0.36, -0.3]];
+  const eyes = [[-0.42, -0.3], [0.42, -0.3]];
   for (let y = 0; y < H; y++) {
     const v = (y - cy) / Sy, bay = (y & 3) << 2;
     for (let x = 0; x < W; x++) {
@@ -1651,14 +1651,13 @@ function paintFace() {
         for (const sg of [-1, 1]) { const du = u - sg * 0.09, dv = v + 0.02; if (Math.abs(du - dv * 0.4 * sg) < 0.018 && Math.abs(dv) < 0.06) base *= 0.15; }
         // flashlight from just below and in front: brighter low and centre, falling off to the edges
         const lit = clamp(0.95 - 0.55 * Math.hypot(u * 0.75, (v - 0.35) * 0.9), 0.08, 1) * sstep(1, 0.55, head);
-        let L = base * lit * 0.55;
-        r = 48 * L; g = 38 * L; b = 30 * L;
+        r = g = b = 0; // the face itself stays black: only the eyes and teeth show
         // the mouth
         const mt = mouthTop(u), mb = mouthBot(u);
         if (Math.abs(u) < 0.92 && v > mt && v < mb) {
           const edge = Math.min(v - mt, mb - v);
           const gum = edge < 0.05 ? 1 : 0;
-          r = gum ? 46 * lit : 5; g = gum ? 10 * lit : 3; b = gum ? 10 * lit : 3;
+          r = g = b = 0;
           // throat: utterly black at the back
         }
         // teeth: crooked needles hanging from the top line, jutting up from the bottom
@@ -1677,11 +1676,7 @@ function paintFace() {
         };
         const T = tooth(FACE.up, true) || tooth(FACE.lo, false);
         if (T) { r = T[0]; g = T[1]; b = T[2]; }
-        // a strand of drool between the jaws
-        if (Math.abs(u - 0.27 - Math.sin(v * 9) * 0.02) < 0.007 && v > mouthTop(0.27) + 0.08 && v < mouthBot(0.27) - 0.06) { r = 150; g = 145; b = 128; }
       } else {
-        // antler bases running off the top corners
-        for (const sg of [-1, 1]) { const au = u * sg - 0.95, av = v + 0.95; if (au > 0 && Math.abs(av + au * 0.55 - Math.sin(au * 3) * 0.08) < 0.09 - au * 0.02) { const L = 0.25 * clamp(1 - Math.hypot(u, v) * 0.35, 0.1, 1); r = 40 * L; g = 34 * L; b = 26 * L; } }
       }
       // quantise like the rest of the game
       const m = Math.max(r, g, b) / 255;
@@ -1691,7 +1686,7 @@ function paintFace() {
   }
   // the eyes: white-hot, almond, with a glare that bleeds over the sockets
   for (const [ex, ey] of eyes) {
-    const exx = cx + ex * Sx, eyy = cy + ey * Sy, rx = 0.17 * Sx, ry = 0.07 * Sy, gl = 0.34 * Sx, rot = ex > 0 ? -0.3 : 0.3;
+    const exx = cx + ex * Sx, eyy = cy + ey * Sy, rx = 0.24 * Sx, ry = 0.1 * Sy, gl = 0.42 * Sx, rot = ex > 0 ? -0.3 : 0.3;
     for (let y = Math.floor(eyy - gl); y <= eyy + gl; y++) for (let x = Math.floor(exx - gl); x <= exx + gl; x++) {
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const dx = x - exx, dy = y - eyy, du = dx * Math.cos(rot) + dy * Math.sin(rot), dv = -dx * Math.sin(rot) + dy * Math.cos(rot);
