@@ -1700,13 +1700,13 @@ function paintFace() {
   }
   // the eyes: white-hot, almond, with a glare that bleeds over the sockets
   for (const [ex, ey] of eyes) {
-    const exx = cx + ex * Sx, eyy = cy + ey * Sy, rx = 0.24 * Sx, ry = 0.1 * Sy, gl = 0.42 * Sx, rot = ex > 0 ? -0.3 : 0.3;
+    const exx = cx + ex * Sx, eyy = cy + ey * Sy, rx = 0.2 * Sx, ry = 0.17 * Sy, gl = 0.44 * Sx, rot = ex > 0 ? -0.3 : 0.3;
     for (let y = Math.floor(eyy - gl); y <= eyy + gl; y++) for (let x = Math.floor(exx - gl); x <= exx + gl; x++) {
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const dx = x - exx, dy = y - eyy, du = dx * Math.cos(rot) + dy * Math.sin(rot), dv = -dx * Math.sin(rot) + dy * Math.cos(rot);
-      const k = du / rx, inEye = Math.abs(k) < 1 && Math.abs(dv) < ry * (1 - k * k) * (dv < 0 ? 0.8 : 1.1); // almond: pointed corners
+      const k = du / rx, inEye = Math.abs(k) < 1 && Math.abs(dv) < ry * Math.sqrt(1 - k * k) * (dv < 0 ? 0.92 : 1); // wide open, round
       if (inEye) px1(x, y, 255, 255, 248, 1);
-      else { const q = Math.hypot(dx, dy) / gl; if (q < 1) { const a = (1 - q) * (1 - q) * 0.55; if (a > BAY[((y & 3) << 2) | (x & 3)] * 0.5) px1(x, y, 230, 232, 220, a); } }
+      else { const q = Math.hypot(dx, dy) / gl; if (q < 1) { const a = (1 - q) * (1 - q) * 0.8; if (a > BAY[((y & 3) << 2) | (x & 3)] * 0.5) px1(x, y, 230, 232, 220, a); } }
     }
   }
 }
