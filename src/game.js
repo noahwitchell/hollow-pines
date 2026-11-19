@@ -1591,8 +1591,8 @@ function paintFace() {
             const along = (v - tv) * dir; if (along < -0.01 || along > L2) continue;
             const cxu = tu + t.tilt * along * dir * 0.6, half = t.w * (1 - along / L2);
             const du = u - cxu; if (Math.abs(du) > half) continue;
-            const k = 0.62 + 0.38 * (1 - along / L2) * lit; let tr = 214 * k, tg = 202 * k, tb = 168 * k;
-            if (du < -half * 0.3 && du > -half * 0.75 && along < L2 * 0.8) { tr = 250; tg = 245; tb = 228; } // wet glint
+            const k = (0.62 + 0.38 * (1 - along / L2) * lit) * 0.34; let tr = 214 * k, tg = 202 * k, tb = 168 * k; // dim: you can just make them out
+            if (du < -half * 0.3 && du > -half * 0.75 && along < L2 * 0.8) { tr = 120; tg = 116; tb = 104; } // wet glint
             if (along < 0.012) { tr *= 0.6; tg *= 0.5; tb *= 0.45; }
             return [tr, tg, tb];
           }
@@ -1608,16 +1608,17 @@ function paintFace() {
       out32[i] = (0xff000000 | (clamp(b, 0, 255) << 16) | (clamp(g, 0, 255) << 8) | clamp(r, 0, 255)) >>> 0;
     }
   }
-  // the eyes: white-hot, almond, with a glare that bleeds over the sockets
-  for (const [ex, ey] of eyes) {
-    const exx = cx + ex * Sx, eyy = cy + ey * Sy, rx = 0.2 * Sx, ry = 0.17 * Sy, gl = 0.44 * Sx, rot = ex > 0 ? -0.3 : 0.3;
-    for (let y = Math.floor(eyy - gl); y <= eyy + gl; y++) for (let x = Math.floor(exx - gl); x <= exx + gl; x++) {
-      if (x < 0 || y < 0 || x >= W || y >= H) continue;
-      const dx = x - exx, dy = y - eyy, du = dx * Math.cos(rot) + dy * Math.sin(rot), dv = -dx * Math.sin(rot) + dy * Math.cos(rot);
-      const k = du / rx, inEye = Math.abs(k) < 1 && Math.abs(dv) < ry * Math.sqrt(1 - k * k) * (dv < 0 ? 0.92 : 1); // wide open, round
-      if (inEye) px1(x, y, 255, 255, 248, 1);
-      else { const q = Math.hypot(dx, dy) / gl; if (q < 1) { const a = (1 - q) * (1 - q) * 0.8; if (a > BAY[((y & 3) << 2) | (x & 3)] * 0.5) px1(x, y, 230, 232, 220, a); } }
+  // the eyes: big, round, white-hot, with a feathered haze around each (the brighter of the two wins, so they don't fog together)
+  const rx = 0.2 * Sx, ry = 0.17 * Sy, gl = 0.55 * Sx;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let inEye = false, a = 0;
+    for (const [ex, ey] of eyes) {
+      const exx = cx + ex * Sx, eyy = cy + ey * Sy, dx = x - exx, dy = y - eyy; if (Math.abs(dx) > gl + rx || Math.abs(dy) > gl + ry) continue;
+      const k = dx / rx; if (Math.abs(k) < 1 && Math.abs(dy) < ry * Math.sqrt(1 - k * k) * (dy < 0 ? 0.92 : 1)) inEye = true;
+      const q = Math.max(0, Math.hypot(dx / rx, dy / ry) - 1) * rx / gl; if (q < 1) a = Math.max(a, Math.pow(1 - q, 2.6) * 0.68);
     }
+    if (inEye) px1(x, y, 255, 255, 248, 1);
+    else if (a > BAY[((y & 3) << 2) | (x & 3)] * 0.25) px1(x, y, 225, 230, 222, a);
   }
 }
 
