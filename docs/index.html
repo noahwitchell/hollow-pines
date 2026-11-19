@@ -155,7 +155,7 @@ const PAL = {
   rock: ['#86837b', '#6f6c65', '#55534d'].map(C), fern: ['#4f6b33', '#5f7c3a', '#3e5628'].map(C),
   bush: ['#3d5a2c', '#4a6833', '#2f4622', '#55703a'].map(C),
   stump: ['#a39c8e', '#8a8477', '#6a655b'].map(C),
-  hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#38322a'), hornHi: C('#5a5342'), tooth: ['#b3a684', '#d8ceb0'].map(C), claw: C('#6f6552'), mouth: C('#040303'),
+  hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#211d18'), hornHi: C('#3a342a'), tooth: ['#b3a684', '#d8ceb0'].map(C), claw: C('#35302a'), mouth: C('#040303'),
   deer: ['#7d5b3c', '#6a4b30', '#d8cdb8'].map(C), jacket: C('#3f4a5c'), hair: C('#3a2a20'), hand: C('#c9a98a'), torch: C('#d0d0cc'),
   camper: [C('#b8503a'), C('#5a2418'), C('#d9b08c'), C('#262422'), C('#e0d6c0')],
   tent: ['#4f6a52', '#3c5440', '#6b8a6c'].map(C), car: ['#6a4a3c', '#53392e', '#1d2227', '#a8b0b8'].map(C), refl: C('#cfe6f2'),
@@ -417,9 +417,9 @@ const bat = { c: 1, r: 1, dead: false, force: 0, nextFl: 40, flT: 0, plant: fals
 const beam = { out: 1, hw: 0.52, R: 10.5, tr: 1, tg: 0.92, tb: 0.74, cosO: 0 };
 const CR = { x: 1e6, y: 1e6, a: 0, st: 'away', t: 0, v: 0, eyes: false, A: 0, unlit: 0, prev: '', lx: 0, ly: 0, tx: 0, ty: 0, dur: 0, rad: 14, dir: 1, nextSnd: 0, nextBr: 0, lit: 0, lost: 0, fire: null, hunting: false, seen: 0, stung: false, eyeP: null, ph: 0, mv: 0, lastX: null, lastY: null, seed: null };
 const DEER = { on: false, x: 0, y: 0, a: 0, st: 'watch', t: 0, litT: 0, stepT: 0 };
-const D = { t: 0, next: 30, bold: 0, sightings: 0, hunts: 0, bluffs: 0, heat: 0, amb: 20, mute: 0 };
+const D = { t: 0, phase: 'off', pt: 0, pdur: 0, lvl: 0, falseT: -1, flash: 0, lastOff: -9, sightings: 0, encounters: 0, saves: 0, deaths: 0, amb: 20, mute: 0 };
 let lightOn = true, narrow = false, adapt = 0, fear = 0.05, shake = 0, cam = { x: 0, y: 2 }, tNow = 0;
-let mode = 'title', runSeed = 1, runTime = 0, deathT = 0, ripples = [], soundOn = true, wonT = 0, bestStats = null;
+let fadeIn = 0, mode = 'title', runSeed = 1, runTime = 0, deathT = 0, ripples = [], soundOn = true, wonT = 0, bestStats = null;
 const sd = new Float32Array(1024), sr = new Float32Array(1024), NB = 1024;
 
 // ---------------- audio ----------------
@@ -593,7 +593,7 @@ focusBtn.addEventListener('pointerdown', e => { e.stopPropagation(); initAudio()
 lightBtn.addEventListener('click', e => { if (e.detail === 0) toggleLight(); });
 focusBtn.addEventListener('click', e => { if (e.detail === 0) toggleFocus(); });
 $('pauseBtn').addEventListener('click', () => pause());
-function toggleLight() { lightOn = !lightOn; snd.click(lightOn); syncBtns(); }
+function toggleLight() { lightOn = !lightOn; snd.click(lightOn); syncBtns(); if (!lightOn) D.lastOff = runTime; else if (runTime - D.lastOff < 0.6) D.flash = 1.1; } // flicking it off and on at it startles it
 function toggleFocus() { narrow = !narrow; snd.click(true); syncBtns(); }
 function syncBtns() {
   lightBtn.classList.toggle('on', lightOn && !bat.dead); lightBtn.classList.toggle('dead', lightOn && bat.dead);
@@ -647,7 +647,7 @@ function updatePlayer(dt) {
     if (P.stepT <= 0) {
       P.stepT = 0.75 + R() * 0.5; const surf = surfaceAt(P.x, P.y); snd.step(surf, P.mode); if (P.inBush) snd.rustle(P.x + 0.3, P.y, 0.25);
       // now and then a branch cracks loudly underfoot, and it hears that too
-      if (surf !== 'dirt' && R() < (P.mode === 'run' ? 0.1 : P.mode === 'walk' ? 0.04 : 0.012)) { snd.twig(P.x, P.y, 1.6); if (CR.st !== 'away' && crDist() < 22) CR.A = Math.min(0.9, CR.A + 0.06); }
+      if (surf !== 'dirt' && R() < (P.mode === 'run' ? 0.1 : P.mode === 'walk' ? 0.04 : 0.012)) { snd.twig(P.x, P.y, 1.6); if (D.phase === 'calm' || D.phase === 'uneasy') D.pt += 5; }
     }
   }
   // aim: right stick, mouse, or drift toward walking direction
@@ -659,19 +659,16 @@ function updatePlayer(dt) {
 }
 function worldToCss(x, y) { const s = VW() / W; return { x: ((x - cam.x) * PPM + W / 2) * s, y: ((y - cam.y) * PPM + H / 2) * s }; }
 
-function updateBattery(dt) {
-  const on = lightOn && !bat.dead;
-  if (on) { bat.c -= dt * (narrow ? 1 / 28 : 1 / 75); bat.r = Math.max(0.45, bat.r - dt * (narrow ? 0.0008 : 0.0004)); }
-  else bat.c += (bat.r - bat.c) * dt * 0.24;
-  if (bat.c <= 0) { bat.c = 0; if (!bat.dead) { bat.dead = true; snd.fizzle(); syncBtns(); } }
-  if (bat.dead && bat.c > 0.3 * bat.r) { bat.dead = false; if (lightOn) snd.sputter(); syncBtns(); }
+function updateBattery(dt) { // no battery for now: the light is steady except for its own random flicker
+  const on = lightOn;
+  bat.c = 1;
   const base = sstep(0, 0.5, bat.c);
   let fl = 1;
   // the light stutters on its own clock: roughly once a minute, at a random moment
   if (on && mode === 'play') {
     if (bat.flT <= 0 && runTime > bat.nextFl) {
       bat.flT = 0.6 + R() * 0.9; bat.nextFl = runTime + 40 + R() * 45; snd.click(false);
-      bat.plant = CR.st === 'follow' && crDist() < 22 && R() < 0.35; // sometimes, when it comes back, it's standing in the beam
+      bat.plant = (CR.st === 'lurk' || CR.st === 'creep') && R() < 0.4; // sometimes, when it comes back, it's standing in the beam
     }
     if (bat.flT > 0) {
       bat.flT -= dt; fl = vnoise(tNow * 22, 3.1) > 0.45 ? 0.1 : 1;
@@ -717,17 +714,17 @@ function buildShadows() {
 }
 
 // ---------------- the creature ----------------
-// It is always out there. Most of the time it follows at a distance, out of the light, and stops when you stop.
-// Its attention (CR.A) rises when you stare at it or make noise near it, and falls while you stay dark and quiet.
-// At full attention it drops to all fours and comes for you. You can outrun it in bursts, break its line of
-// sight, go dark and freeze, or get to a fire. In Chapter 1 it isn't lethal yet: if it reaches you it rears up,
-// screams in your face and is gone.
-const ACTIVE = { stalk: 1, glimpse: 1, behind: 1, posing: 1, search: 1, stand: 1, follow: 1 };
-const STOOP = { follow: 1, stalk: 1, search: 1, retreat: 1, behind: 1, glimpse: 1, blocked: 1 };
-const CH = { n: 1, name: 'The Washout', lethal: false };
+// It is afraid of the light, and it wants you. It comes in from wherever your beam isn't pointing.
+// Catch it in the beam and it reacts, but never the same way twice running: it bolts sideways, backs off
+// watching you, turns and runs, snuffs its eyes out and slips away, holds a terrible beat and then breaks,
+// or shadows you, keeping its distance while the light is on it and closing in while it isn't.
+// Walking at it or flashing the light at it makes it break sooner. Each time you drive it off it comes
+// back a little closer (D.lvl). It can only get you when it's right on you and your light is somewhere else.
+const STOOP = { lurk: 1, creep: 1, shadow: 1, flee: 1 };
+const CH = { n: 1, name: 'The Washout', lethal: true };
 function crDist() { return Math.hypot(CR.x - P.x, CR.y - P.y); }
 function placeFree(x, y, r = 0.4) { for (let i = 0; i < 16; i++) { if (!blocked(x, y, r)) return [x, y]; x += (R() - 0.5) * 2.5; y += (R() - 0.5) * 2.5; } return null; }
-function setCr(st) { if (st !== 'posing' && st !== 'frozen') CR.harmless = false; CR.st = st; CR.t = 0; }
+function setCr(st) { CR.st = st; CR.t = 0; }
 function moveTo(e, tx, ty, sp, dt) {
   const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy);
   if (d < 0.05) return d;
@@ -736,186 +733,174 @@ function moveTo(e, tx, ty, sp, dt) {
   for (const f of fires) { const qx = e.x - f.x, qy = e.y - f.y, q = Math.hypot(qx, qy), md = f.safe + 0.6; if (q < md && q > 1e-4) { e.x = f.x + qx / q * md; e.y = f.y + qy / q * md; } }
   return d;
 }
-function faceP(dt) { CR.a += clamp(wrapA(Math.atan2(P.y - CR.y, P.x - CR.x) - CR.a), -6 * dt, 6 * dt); }
-function followDist() { return lerp(24, 9, CR.A); }
-// back into the dark: it takes up following again from somewhere behind you (or leaves, if the story says so)
-function goAway() {
-  CR.hunting = false; CR.eyes = false;
-  if (!S.follow) { CR.st = 'away'; CR.x = CR.y = 1e6; return; }
-  const FD = followDist(), side = R() < 0.5 ? -1 : 1;
-  for (let i = 0; i < 6; i++) {
-    const a = beam.aim + Math.PI + side * (0.5 + R() * 0.9), p = placeFree(P.x + Math.cos(a) * FD, P.y + Math.sin(a) * FD);
-    if (p && beamAt(p[0], p[1], 1.4) < 0.01) { CR.x = p[0]; CR.y = p[1]; break; }
+function faceP(dt, k = 6) { CR.a += clamp(wrapA(Math.atan2(P.y - CR.y, P.x - CR.x) - CR.a), -k * dt, k * dt); }
+function crLit() { return beamAt(CR.x, CR.y); }
+// somewhere your light isn't: behind you, or off to one side of behind
+function darkSpot(dist, spread = 1) {
+  for (let i = 0; i < 10; i++) {
+    const a = beam.aim + Math.PI + (R() - 0.5) * 2 * (0.6 + 0.7 * spread), p = placeFree(P.x + Math.cos(a) * dist, P.y + Math.sin(a) * dist);
+    if (p && beamAt(p[0], p[1], 1.5) < 0.01 && !safeFire(p[0], p[1], 2)) return p;
   }
-  setCr('follow'); CR.eyes = true; CR.nextSnd = 4 + R() * 6;
-  D.next = lerp(26, 11, CR.A) * (0.7 + R() * 0.6);
+  return null;
 }
-function startFreeze(d) {
-  CR.prev = CR.st; setCr('frozen'); CR.unlit = 0; D.sightings++;
-  CR.A = Math.min(CR.harmless ? 0.6 : 1, CR.A + (d < 7 ? 0.22 : 0.12));
-  const big = d < 7;
-  snd.stinger(big); fear = Math.max(fear, big ? 0.95 : 0.6); shake = big ? 1 : 0.25;
-  if (CR.prev !== 'posing') CR.eyes = true;
+// a point around you at radius r, steering round the outside of the beam
+function ringPoint(r, avoid = 1.6) {
+  let ang = Math.atan2(CR.y - P.y, CR.x - P.x);
+  const rel = wrapA(ang - beam.aim);
+  if (beam.out > 0.05 && Math.abs(rel) < beam.hw + 0.7) ang += Math.sign(rel || 1) * avoid * 0.05;
+  return [P.x + Math.cos(ang) * r, P.y + Math.sin(ang) * r];
 }
-function startHunt(scream = true) {
-  setCr('hunt'); CR.hunting = true; CR.v = 0; CR.eyes = true; CR.lx = P.x; CR.ly = P.y; CR.lost = 0; CR.A = 1; CR.nextGuess = 0;
-  if (scream) { snd.shriek(CR.x, CR.y); D.hunts++; shake = 0.6; }
-  fear = 1;
+function placeCr(p, st) { CR.x = p[0]; CR.y = p[1]; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); CR.lastX = null; CR.press = 0; CR.litT = 0; CR.spotted = false; CR.nextBr = 0; CR.nextSnd = 2 + R() * 3; setCr(st); }
+function crGone() { CR.st = 'away'; CR.x = CR.y = 1e6; CR.eyes = false; CR.eyesShut = false; if (D.phase === 'enc' || D.phase === 'uneasy') endEncounter(); }
+
+// ---- what it does when the light finds it ----
+const REACT_W = { bolt: 3, back: 2.4, run: 2, snuff: 1.6, hold: 1.6, shadow: 2.2 };
+function pickReaction(noShadow) {
+  const w = Object.assign({}, REACT_W);
+  w.shadow += D.lvl * 2; if (noShadow || !S.follow || S.phase !== 'path' || crDist() < 4) w.shadow = 0;
+  if (CR.lastR) w[CR.lastR] = 0;
+  if (CR.lastR === 'hold') w.hold = 0;
+  let sum = 0; for (const k in w) sum += w[k];
+  let r = R() * sum; for (const k in w) { r -= w[k]; if (r <= 0) return k; }
+  return 'bolt';
 }
-function plantInBeam() {
-  const dd = 6 + R() * 2.5, a = beam.aim + (R() - 0.5) * beam.hw;
-  const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd);
-  if (p) { CR.x = p[0]; CR.y = p[1]; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); CR.eyes = true; setCr('stand'); }
+function newTolerance(shadowing) {
+  const r = R(), t = r < 0.3 ? 0.3 + R() * 0.4 : r < 0.75 ? 0.9 + R() * 1.3 : 2.2 + R() * 1.8;
+  return shadowing ? 3 + t * 1.5 : t;
 }
-function retreat() { setCr('retreat'); CR.eyes = false; snd.rustle(CR.x, CR.y, 0.5); }
-function bluff() { setCr('rear'); CR.eyes = true; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); snd.shriek(CR.x, CR.y); snd.caught(); shake = 1.4; fear = 1; D.bluffs++; }
-// what it can tell about you right now
-// 2 = sees you (knows exactly where you are), 1 = hears you (roughly where), 0 = nothing
-function senses(d) {
-  const los = d < 45 && losClear(CR.x, CR.y, P.x, P.y);
-  const seeR = beam.out > 0.05 ? 40 : P.mode === 'still' ? 1.2 : P.mode === 'sneak' ? 2.6 : P.mode === 'walk' ? 7 : 11;
-  const hearR = P.mode === 'run' ? 22 : P.mode === 'walk' ? (P.inBush ? 12 : 8) : P.mode === 'sneak' ? (P.inBush ? 5 : 2.5) : 0.8;
-  return los && d < seeR ? 2 : d < hearR ? 1 : 0;
-}
-function noteYou(k, d) {
-  if (k === 2) { CR.lx = P.x; CR.ly = P.y; return; }
-  if (CR.t < CR.nextGuess) return; // a sound only says roughly where
-  const e = d * 0.35; CR.lx = P.x + (R() - 0.5) * 2 * e; CR.ly = P.y + (R() - 0.5) * 2 * e; CR.nextGuess = CR.t + 0.6;
-}
-function updateAttention(dt) {
-  if (CR.st === 'away') return;
+function react(kind) {
+  CR.lastR = kind; CR.rk = kind; CR.press = 0;
   const d = crDist();
-  let dA = 0;
-  if (CR.st === 'frozen' && CR.lit > 0.09) dA += dt * (narrow ? 0.3 : 0.18) * (1 + D.bold);            // staring at it
-  const loud = P.mode === 'run' ? 1 : P.inBush && P.moving ? 0.6 : P.mode === 'walk' ? 0.15 : 0;
-  dA += dt * loud * 0.045 * sstep(30, 6, d);                                                           // noise near it
-  if (beam.out < 0.05) dA -= dt * (P.mode === 'still' ? 0.06 : P.mode === 'sneak' ? 0.035 : 0.01);   // dark and quiet
-  else dA -= dt * 0.006;
-  const cap = CR.harmless ? 0.6 : (CR.st === 'frozen' || (d < 6 && P.mode === 'run')) ? 1 : 0.9;
-  if (CR.st !== 'hunt' && CR.st !== 'search' && CR.st !== 'blocked') CR.A = clamp(CR.A + dA, 0, Math.max(cap, 0));
+  if (kind === 'shadow') { CR.sd = clamp(d, 6, 13); CR.tol = newTolerance(true); setCr('shadow'); snd.rustle(CR.x, CR.y, 0.3); return; }
+  setCr('flee'); CR.eyes = kind !== 'snuff';
+  // sideways: away from the middle of the beam
+  const rel = wrapA(Math.atan2(CR.y - P.y, CR.x - P.x) - beam.aim); CR.side = Math.sign(rel || (R() - 0.5));
+  CR.rt = kind === 'bolt' ? 0.5 + R() * 0.5 : kind === 'back' ? 1.6 + R() * 1.4 : kind === 'hold' ? 1.3 + R() * 1.3 : 0;
+  CR.after = kind === 'hold' ? (R() < 0.5 ? 'bolt' : 'run') : null;
+  if (kind === 'bolt' || kind === 'run') snd.rustle(CR.x, CR.y, 0.7);
+  if (kind === 'hold') snd.breath(CR.x, CR.y, 0.45);
+  if (kind === 'snuff') snd.rustle(CR.x, CR.y, 0.25);
 }
+// it's been seen: the sting, scaled by how close
+function spotted(d) {
+  if (CR.spotted) return;
+  CR.spotted = true; D.sightings++;
+  const big = d < 7; snd.stinger(big); fear = Math.max(fear, big ? 0.95 : 0.6); shake = big ? 0.8 : 0.2;
+}
+// light pressure: building while it's in the beam, faster if you walk at it or flash the light at it
+function lightPressure(dt, lit, d) {
+  if (lit > 0.09) {
+    CR.litT += dt; if (CR.litT > 0.08) spotted(d);
+    const tx = CR.x - P.x, ty = CR.y - P.y, toward = (P.vx * tx + P.vy * ty) / (d || 1);
+    CR.press += dt * (1 + (narrow ? 0.5 : 0) + (toward > 0.6 ? 1.4 : 0) + (d < 5 ? 0.6 : 0));
+    if (D.flash > 0) { CR.press += D.flash; D.flash = 0; }
+    return true;
+  }
+  CR.litT = 0; CR.press = Math.max(0, CR.press - dt * 0.4);
+  return false;
+}
+function startLunge() { setCr('lunge'); CR.eyes = true; CR.v = 0; snd.thud(CR.x, CR.y); }
 
 function updateCreature(dt) {
   if (CR.st === 'away') return;
   CR.t += dt;
-  const d = crDist();
-  const lit = beamAt(CR.x, CR.y); CR.lit = lit;
+  const d = crDist(), lit = crLit(); CR.lit = lit;
   const isLit = lit > 0.09;
-  if (isLit && ACTIVE[CR.st]) { startFreeze(d); }
+  const reactive = CR.st === 'lurk' || CR.st === 'creep' || CR.st === 'stare';
+  if (reactive && lightPressure(dt, lit, d)) {
+    if (CR.st !== 'stare') { CR.tol = newTolerance(false); setCr('stare'); }
+    if (CR.eyesShut && CR.litT > 0.5) CR.eyesShut = false; // it opens its eyes
+  }
+  if (CR.st === 'stare' && CR.press > CR.tol) react(pickReaction(false));
+  if (safeFire(P.x, P.y, 1) && CR.st !== 'flee' && CR.st !== 'tease') { react(R() < 0.5 ? 'run' : 'back'); }
+  const tell = () => { if (d < 6 && CR.t > CR.nextBr) { snd.breath(CR.x, CR.y, 0.32); CR.nextBr = CR.t + 1.8 + R(); fear = Math.max(fear, 0.7); } };
   switch (CR.st) {
-    case 'follow': {
-      // shadow you from out of the light; stop when you stop
-      const FD = followDist();
-      let ang = Math.atan2(CR.y - P.y, CR.x - P.x);
-      const rel = wrapA(ang - beam.aim);
-      if (beam.out > 0.05 && Math.abs(rel) < beam.hw + 0.6) ang += Math.sign(rel || 1) * 1.7 * dt;
-      const tx = P.x + Math.cos(ang) * FD, ty = P.y + Math.sin(ang) * FD, gap = Math.hypot(tx - CR.x, ty - CR.y);
-      const sp = P.moving ? Math.max(2.2, Math.hypot(P.vx, P.vy) * 1.3) : gap > 3 ? 1.4 : 0;
-      if (sp > 0) moveTo(CR, tx, ty, sp, dt); else faceP(dt);
-      if (CR.t > CR.nextSnd) { if (R() < 0.5) snd.twig(CR.x, CR.y, 0.45 + CR.A * 0.5); else snd.rustle(CR.x, CR.y, 0.28 + CR.A * 0.3); CR.nextSnd = CR.t + lerp(16, 5, CR.A) * (0.6 + R() * 0.8); }
-      if (CR.A > 0.6 && d < 13 && CR.t > CR.nextBr) { snd.breath(CR.x, CR.y, 0.3); CR.nextBr = CR.t + 3 + R() * 2; }
-      if (CR.A > 0.85 && d < 6 && P.mode === 'run') startHunt();
-      if (d > 42 && beamAt(CR.x, CR.y, 1.6) < 0.01) goAway();  // fell behind: catch up unseen
-      break;
-    }
     case 'tease': // the first time: it stands where the road used to be, and then it is gone
       faceP(dt); CR.eyes = true;
       { const [qx, qy] = s2(CR.x, CR.y); if (qx > 4 && qx < W - 4 && qy > 26 && qy < H - 4 && (lit > 0.03 || beamAt(CR.x, CR.y, 3) > 0.05)) CR.seen += dt; }
       if (CR.seen > 0 && !CR.stung) { CR.stung = true; snd.stinger(false); fear = Math.max(fear, 0.7); D.sightings++; }
-      if (CR.seen > 1.1 || CR.t > 30 || d > 28) { setCr('retreat'); CR.eyes = false; snd.rustle(CR.x, CR.y, 0.4); }
+      if (CR.seen > 1.1 || CR.t > 30 || d > 28) { react(R() < 0.5 ? 'back' : 'snuff'); }
       break;
-    case 'stalk': {
-      const ang = Math.atan2(CR.y - P.y, CR.x - P.x), rel = wrapA(ang - beam.aim);
-      let na = ang;
-      if (beam.out > 0.05 && Math.abs(rel) < beam.hw + 0.6) na += Math.sign(rel || 1) * 1.1 * dt * 3;
-      else na += CR.dir * 0.1 * dt * 3;
-      moveTo(CR, P.x + Math.cos(na) * CR.rad, P.y + Math.sin(na) * CR.rad, 2.4, dt);
-      if (CR.t > CR.nextSnd) { if (R() < 0.6) snd.twig(CR.x, CR.y, 0.8); else snd.rustle(CR.x, CR.y, 0.45); CR.nextSnd = CR.t + 2.5 + R() * 3; }
-      if (CR.t > CR.dur) {
-        goAway();
+    case 'lurk': { // far out, keeping pace, out of the light. You might hear it once.
+      const [tx, ty] = ringPoint(CR.sd, 2.2), sp = P.moving ? Math.hypot(P.vx, P.vy) * 1.15 + 0.6 : 1.2;
+      moveTo(CR, tx, ty, sp, dt);
+      if (CR.t > CR.nextSnd) { if (R() < 0.6) snd.twig(CR.x, CR.y, 0.5); else snd.rustle(CR.x, CR.y, 0.3); CR.nextSnd = CR.t + 9 + R() * 8; }
+      if (d > 45) { const p = darkSpot(CR.sd); if (p) { CR.x = p[0]; CR.y = p[1]; } }
+      break;
+    }
+    case 'creep': { // coming in to where it means to stand, only moving while your light is elsewhere
+      const sp = (P.moving ? Math.hypot(P.vx, P.vy) : 0) + 2.4;
+      const [tx, ty] = ringPoint(CR.sd, 2.6), gap = moveTo(CR, tx, ty, sp, dt);
+      if (CR.t > CR.nextSnd && d < 18) { snd.rustle(CR.x, CR.y, 0.22); CR.nextSnd = CR.t + 4 + R() * 5; }
+      if (gap < 1 || CR.t > 25) { setCr('stare'); CR.tol = newTolerance(false); }
+      break;
+    }
+    case 'stare': { // standing, watching you. Out of the light, it edges closer.
+      faceP(dt);
+      if (!isLit) {
+        CR.sd = Math.max(0, CR.sd - dt * (CR.slow ? 0.13 : 0.24 + D.lvl * 0.12));
+        const [tx, ty] = ringPoint(CR.sd, 0.8);
+        moveTo(CR, tx, ty, (P.moving ? Math.hypot(P.vx, P.vy) * 1.1 : 0) + 0.8, dt);
+        tell();
+        if (CR.sd < 2.3 && d < 2.8) startLunge();
+      } else if (P.moving && d > CR.sd + 3) { const [tx, ty] = ringPoint(CR.sd, 0); moveTo(CR, tx, ty, Math.hypot(P.vx, P.vy), dt); }
+      break;
+    }
+    case 'shadow': { // it keeps its distance while the light's on it; look away and it closes
+      const running = P.mode === 'run';
+      if (isLit) { lightPressure(dt, lit, d); if (CR.press > CR.tol) { react(pickReaction(true)); break; } }
+      else { CR.litT = 0; CR.sd = Math.max(0, CR.sd - dt * (0.38 + D.lvl * 0.25 + (running ? 0.25 : 0))); tell(); }
+      const [tx, ty] = ringPoint(CR.sd, isLit ? 0 : 2), ps = Math.hypot(P.vx, P.vy);
+      moveTo(CR, tx, ty, ps * 1.12 + (Math.hypot(tx - CR.x, ty - CR.y) > 2 ? 2.2 : 0.6), dt);
+      if (isLit && d < 9) faceP(dt, 3);
+      CR.fours = running;
+      if (CR.t > CR.nextSnd) { snd.rustle(CR.x, CR.y, running ? 0.5 : 0.25); CR.nextSnd = CR.t + (running ? 0.7 : 3 + R() * 3); }
+      if (!isLit && CR.sd < 2.3 && d < 2.8) { CR.fours = false; startLunge(); }
+      if (CR.t > 50) react('run');
+      break;
+    }
+    case 'flee': {
+      const dx = CR.x - P.x, dy = CR.y - P.y, L = Math.hypot(dx, dy) || 1, ox = -dy / L * CR.side, oy = dx / L * CR.side;
+      CR.rt -= dt;
+      switch (CR.rk) {
+        case 'hold': faceP(dt); if (CR.rt <= 0) { CR.rk = CR.after; CR.rt = CR.rk === 'bolt' ? 0.5 + R() * 0.4 : 0; snd.rustle(CR.x, CR.y, 0.7); } break;
+        case 'bolt': if (CR.rt > 0) moveTo(CR, CR.x + ox * 4, CR.y + oy * 4, 7.5, dt); else moveTo(CR, CR.x + (dx / L + ox * 0.4) * 4, CR.y + (dy / L + oy * 0.4) * 4, 6.5, dt); break;
+        case 'back':
+          if (CR.rt > 0) { const a = CR.a; moveTo(CR, CR.x + dx / L * 2, CR.y + dy / L * 2, 1.3, dt); CR.a = a; faceP(dt, 3); }
+          else { CR.eyes = false; moveTo(CR, CR.x + (dx / L + ox * 0.3) * 4, CR.y + (dy / L + oy * 0.3) * 4, 4.5, dt); }
+          break;
+        case 'run': moveTo(CR, CR.x + (dx / L + ox * 0.15) * 4, CR.y + (dy / L + oy * 0.15) * 4, 6.8, dt); break;
+        case 'snuff': CR.eyes = false; moveTo(CR, CR.x + (dx / L + ox * 0.9) * 4, CR.y + (dy / L + oy * 0.9) * 4, 3.4, dt); break;
       }
+      if (CR.rk !== 'hold' && CR.t > CR.nextSnd) { snd.rustle(CR.x, CR.y, 0.35); CR.nextSnd = CR.t + 0.6 + R() * 0.5; }
+      if ((d > 30 && beamAt(CR.x, CR.y, 1.6) < 0.01) || CR.t > 9) crGone();
       break;
     }
-    case 'stand': faceP(dt); if (CR.t > 4) goAway(); break;
-    case 'glimpse': if (moveTo(CR, CR.tx, CR.ty, 3.6, dt) < 0.4 || CR.t > 7) goAway(); break;
-    case 'posing': {
-      if (CR.harmless && d < 6) { retreat(); break; }
-      if (!isLit && d < 2.8 && P.noise >= 0.55) CR.A = Math.min(1, CR.A + dt * 0.6);   // walking right past it
-      if (!isLit && d < 5 && P.mode === 'run') CR.A = 1;
-      if (CR.A >= 1) { startHunt(); break; }
-      if (d < 5 && !isLit) { CR.eyes = true; if (CR.t > CR.nextSnd) { snd.breath(CR.x, CR.y, 0.3); CR.nextSnd = CR.t + 2.2; fear = Math.max(fear, 0.6); } }
-      if (P.y < CR.y - 8 || CR.t > 50 || d > 34) goAway();
+    case 'lunge': { // it's on you. Get the light on it and it recoils; if not, that's it.
+      CR.v = Math.min(6, CR.v + dt * 30);
+      moveTo(CR, P.x, P.y, CR.v, dt); CR.fours = true;
+      if (isLit && CR.t > 0.05) { CR.fours = false; spotted(0); shake = 1; snd.shriek(CR.x, CR.y); D.saves++; CR.lastR = null; react(R() < 0.5 ? 'bolt' : 'run'); break; }
+      if (crDist() < 0.85) { CR.fours = false; caught(); }
+      else if (CR.t > 1.2) { CR.fours = false; react('back'); }
       break;
     }
-    case 'behind': {
-      const ax = Math.cos(P.aim), ay = Math.sin(P.aim);
-      moveTo(CR, P.x - ax * 3.2, P.y - ay * 3.2, 2.2, dt); faceP(dt);
-      if (CR.t > CR.nextSnd) { snd.breath(CR.x, CR.y, 0.4); CR.nextSnd = CR.t + 1.7; }
-      if (CR.t > 4.2) goAway();
-      break;
-    }
-    case 'frozen':
-      faceP(dt);
-      if (CR.prev === 'posing' && CR.t > 0.5 && !CR.eyes) CR.eyes = true; // it opens its eyes
-      if (isLit) CR.unlit = 0; else CR.unlit += dt;
-      if (CR.A >= 1 && D.t > 20) startHunt();
-      else if (CR.unlit > 0.3) retreat();
-      break;
-    case 'retreat': {
-      const dx = CR.x - P.x, dy = CR.y - P.y, L = Math.hypot(dx, dy) || 1;
-      const rel = wrapA(Math.atan2(dy, dx) - beam.aim), side = Math.sign(rel || 1);
-      const ox = -dy / L * side, oy = dx / L * side;
-      moveTo(CR, CR.x + (dx / L + ox * 0.8) * 4, CR.y + (dy / L + oy * 0.8) * 4, 5.5, dt);
-      if (CR.t > CR.nextSnd) { snd.rustle(CR.x, CR.y, 0.4); CR.nextSnd = CR.t + 0.5; }
-      if (d > 30 || CR.t > 5) goAway();
-      break;
-    }
-    case 'hunt': {
-      // on all fours; a little slower than your sprint, much faster than your walk
-      CR.v = Math.min(CR.t > 9 ? 3.1 : 3.5, CR.v + dt * 5); // it tires a little in a long chase
-      const knows = senses(d);
-      if (knows) { noteYou(knows, d); CR.lost = knows === 2 ? 0 : CR.lost + dt * 0.5; } else CR.lost += dt;
-      const sf = safeFire(P.x, P.y);
-      if (sf) { CR.fire = sf; setCr('blocked'); break; }
-      const dl = moveTo(CR, CR.lx, CR.ly, CR.v, dt);
-      if (CR.t > CR.nextSnd) { snd.thud(CR.x, CR.y); CR.nextSnd = CR.t + 0.28; }
-      if (crDist() < 0.8) { if (CH.lethal) caught(); else bluff(); break; }
-      if (CR.lost > 1.0 && dl < 1.4) { setCr('search'); CR.tx = CR.x; CR.ty = CR.y; }
-      if (CR.t > 22) { CR.A = 0.45; retreat(); }
-      break;
-    }
-    case 'search': {
-      // it lost you: it noses around where it last knew you were
-      if (CR.t > CR.nextSnd || Math.hypot(CR.tx - CR.x, CR.ty - CR.y) < 0.4) { CR.tx = CR.lx + (R() - 0.5) * 12; CR.ty = CR.ly + (R() - 0.5) * 12; CR.nextSnd = CR.t + 2 + R(); if (R() < 0.5) snd.breath(CR.x, CR.y, 0.3); }
-      moveTo(CR, CR.tx, CR.ty, 1.4, dt);
-      const k = senses(d);
-      if (k) { setCr('hunt'); CR.v = 2; CR.nextGuess = 0; noteYou(k, d); snd.thud(CR.x, CR.y); fear = 1; }
-      else if (crDist() < 0.8) { if (CH.lethal) caught(); else bluff(); }
-      else if (CR.t > 10) { CR.A = 0.35; retreat(); }
-      break;
-    }
-    case 'blocked': {
-      const f = CR.fire, qa = Math.atan2(CR.y - f.y, CR.x - f.x) + dt * 0.25;
-      moveTo(CR, f.x + Math.cos(qa) * (f.safe + 1.4), f.y + Math.sin(qa) * (f.safe + 1.4), 1.4, dt); faceP(dt);
-      if (!safeFire(P.x, P.y, 0.5)) { setCr('hunt'); CR.v = 3; }
-      else if (CR.t > 7) { CR.A = 0.3; retreat(); }
-      break;
-    }
-    case 'rear': // reared up in your face; then gone
-      faceP(dt);
-      if (CR.t > 1.4) { CR.A = 0.2; retreat(); }
-      break;
   }
 }
+// the flicker sometimes ends with it standing in the beam
+function plantInBeam() {
+  const dd = lerp(12, 6.5, D.lvl) + R() * 2, a = beam.aim + (R() - 0.5) * beam.hw;
+  const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd);
+  if (p) { placeCr(p, 'stare'); CR.eyes = true; CR.sd = dd; CR.spotted = false; CR.tol = newTolerance(false); }
+}
 function caught() {
-  mode = 'dying'; deathT = 0; snd.caught(); fear = 1; shake = 1.5;
+  mode = 'dying'; deathT = 0; D.deaths++; snd.shriek(CR.x, CR.y); snd.caught(); fear = 1; shake = 1.6; D.mute = 1; stick.move = stick.aim = null; stL.hidden = stR.hidden = true;
   const a = Math.atan2(CR.y - P.y, CR.x - P.x); P.aim = a; beam.aim = a; CR.x = P.x + Math.cos(a) * 0.95; CR.y = P.y + Math.sin(a) * 0.95; CR.a = a + Math.PI;
 }
 
-function spawnDeer(dd = 18 + R() * 7) {
+function spawnDeer(dd = 18 + R() * 7, quiet = true) {
   const a = (beam.out > 0.2 ? beam.aim : P.face) + (R() - 0.5) * 0.4;
   const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd, 0.6); if (!p) return;
-  Object.assign(DEER, { on: true, x: p[0], y: p[1], a: a + Math.PI + (R() - 0.5) * 0.6, st: 'watch', t: 0, litT: 0, stepT: 0 });
+  Object.assign(DEER, { on: true, x: p[0], y: p[1], a: a + Math.PI + (R() - 0.5) * 0.6, st: 'watch', t: 0, litT: 0, stepT: 0, quiet: quiet });
 }
 function updateDeer(dt) {
   if (!DEER.on) return;
@@ -924,7 +909,7 @@ function updateDeer(dt) {
   if (DEER.st === 'watch') {
     DEER.a += clamp(wrapA(Math.atan2(P.y - DEER.y, P.x - DEER.x) - DEER.a), -1.5 * dt, 1.5 * dt);
     if (beamAt(DEER.x, DEER.y, 1.6) > 0.05) DEER.litT += dt;
-    if (d < 9 || DEER.litT > 3 || DEER.t > 30 || (P.mode === 'run' && d < 16)) { DEER.st = 'flee'; DEER.t = 0; snd.deer(DEER.x, DEER.y); fear = Math.max(fear, 0.45); if (CR.st !== 'away') CR.A = Math.min(0.9, CR.A + 0.08); }
+    if (d < 9 || DEER.litT > 3 || DEER.t > 30 || (P.mode === 'run' && d < 16)) { DEER.st = 'flee'; DEER.t = 0; if (!DEER.quiet) { snd.deer(DEER.x, DEER.y); fear = Math.max(fear, 0.45); } }
   } else {
     const ax = DEER.x - P.x, ay = DEER.y - P.y, L = Math.hypot(ax, ay) || 1;
     moveTo(DEER, DEER.x + ax / L * 3, DEER.y + ay / L * 3, 7, dt);
@@ -937,18 +922,18 @@ function updateDeer(dt) {
 // an owl crossing overhead, now and then a deer. They rustle and their eyes catch the beam too, so every noise is a question.
 let critters = [], critT = 14, owl = null;
 const CRIT = { raccoon: { sp: 3.2, flee: 5, len: 0.42 }, rabbit: { sp: 6.5, flee: 6.5, len: 0.24 }, fox: { sp: 5.5, flee: 8, len: 0.5 } };
-function spawnCritter() {
+function spawnCritter(loud = false) {
   const kinds = ['raccoon', 'raccoon', 'rabbit', 'rabbit', 'fox'], kind = kinds[R() * kinds.length | 0];
-  const a = (P.moving ? P.face : beam.aim) + (R() - 0.5) * 1.8, dd = 9 + R() * 8;
+  const a = (loud ? beam.aim + Math.PI * (0.5 + R()) : P.moving ? P.face : beam.aim) + (R() - 0.5) * 1.8, dd = loud ? 8 + R() * 4 : 9 + R() * 8;
   const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd, 0.4); if (!p) return;
-  critters.push({ kind, x: p[0], y: p[1], a: R() * TAU, st: 'idle', t: 0, litT: 0, nextSnd: 1 + R() * 3 });
+  critters.push({ kind, loud, x: p[0], y: p[1], a: R() * TAU, st: 'idle', t: 0, litT: 0, nextSnd: loud ? 0.2 : 1 + R() * 3 });
 }
-function startOwl() { const a = R() * TAU, dd = 14, x = P.x + Math.cos(a) * dd, y = P.y + Math.sin(a) * dd, b = a + Math.PI + (R() - 0.5) * 0.7; owl = { x, y, vx: Math.cos(b) * 6.5, vy: Math.sin(b) * 6.5, t: 0, flap: 0.2 }; snd.owl(x, y); }
+function startOwl() { const a = R() * TAU, dd = 14, x = P.x + Math.cos(a) * dd, y = P.y + Math.sin(a) * dd, b = a + Math.PI + (R() - 0.5) * 0.7; owl = { x, y, vx: Math.cos(b) * 6.5, vy: Math.sin(b) * 6.5, t: 0, flap: 1e9 }; } // owls fly silent
 function updateCritters(dt) {
   critT -= dt;
   if (critT <= 0 && S.phase !== 'camp') {
     critT = 14 + R() * 20;
-    if (critters.length < 2) { if (!DEER.on && R() < 0.22) spawnDeer(); else spawnCritter(); }
+    if (critters.length < 2) { if (!DEER.on && R() < 0.22) spawnDeer(); else spawnCritter(false); }
     if (!owl && R() < 0.3) startOwl();
   }
   for (const c of critters) {
@@ -957,15 +942,16 @@ function updateCritters(dt) {
       if (beamAt(c.x, c.y, 1.4) > 0.05) c.litT += dt;
       if (c.kind === 'fox') c.a += clamp(wrapA(Math.atan2(P.y - c.y, P.x - c.x) - c.a), -2 * dt, 2 * dt); // it watches you
       else if (c.kind === 'raccoon') c.a += Math.sin(c.t * 1.3) * dt * 0.9;                            // rummaging
-      if (c.t > c.nextSnd && d < 22) { c.nextSnd = c.t + 2 + R() * 4; if (c.kind === 'raccoon') snd.chitter(c.x, c.y); else snd.rustle(c.x, c.y, 0.2); }
+      if (c.loud && c.t > c.nextSnd && d < 22) { c.nextSnd = c.t + 2 + R() * 4; if (c.kind === 'raccoon') snd.chitter(c.x, c.y); else snd.rustle(c.x, c.y, 0.2); }
       if (d < k.flee || (P.mode === 'run' && d < k.flee * 2) || c.litT > (c.kind === 'rabbit' ? 1 : 2.5) || c.t > 45) {
-        c.st = 'flee'; c.t = 0; snd.rustle(c.x, c.y, 0.45); fear = Math.max(fear, 0.3);
-        if (c.kind === 'rabbit') snd.thump(c.x, c.y); else if (c.kind === 'fox' && R() < 0.6) snd.bark(c.x, c.y);
+        c.st = 'flee'; c.t = 0;
+        if (c.loud) { snd.rustle(c.x, c.y, 0.45); fear = Math.max(fear, 0.3); }
+        if (!c.loud) {} else if (c.kind === 'rabbit') snd.thump(c.x, c.y); else if (c.kind === 'fox' && R() < 0.6) snd.bark(c.x, c.y);
       }
     } else {
       const zig = c.kind === 'rabbit' ? Math.sin(c.t * 9) * 0.9 : 0, fa = Math.atan2(c.y - P.y, c.x - P.x) + zig;
       moveTo(c, c.x + Math.cos(fa) * 3, c.y + Math.sin(fa) * 3, k.sp, dt);
-      if (R() < dt * 4) snd.rustle(c.x, c.y, 0.25);
+      if (c.loud && R() < dt * 4) snd.rustle(c.x, c.y, 0.25);
       if (d > 30 || c.t > 6) c.dead = true;
     }
   }
@@ -985,100 +971,125 @@ function story(dt) {
   if (!S.teased && P.y < CREEKY + 14 && onRoad(P.x, P.y, 3)) {
     S.teased = true;
     const x = roadX(CREEKY) + 1.2, y = creekY(x) - 3.6, p = placeFree(x, y);
-    if (p) { CR.x = p[0]; CR.y = p[1]; CR.a = Math.PI / 2; CR.eyes = true; CR.seen = 0; CR.stung = false; CR.A = 0; setCr('tease'); }
+    if (p) { placeCr(p, 'tease'); CR.a = Math.PI / 2; CR.eyes = true; CR.seen = 0; CR.stung = false; }
   }
-  // 2. over the footbridge: from here on it follows you
+  if (!S.cpPost && P.y < PY0 + 2) { S.cpPost = true; checkpoint(); }
+  // 2. over the footbridge: from here on it's out there with you
   if (!S.follow && P.y < BRIDGE.y - 4 && P.x < BRIDGE.x + 12) {
-    S.follow = true; S.phase = 'path'; CR.A = 0.1;
-    if (CR.st === 'away') { goAway(); D.next = 18 + R() * 8; }
+    S.follow = true; S.phase = 'path'; setPhase('calm', 16 + R() * 8); D.falseT = 7 + R() * 4; checkpoint();
   }
+  // checkpoints along the path, when it's quiet
+  if (S.follow && S.phase === 'path') { const pr = progress(); for (const c of [0.38, 0.62, 0.82]) if (pr > c && (S.cpAt || 0) < c && (D.phase === 'calm' || CR.st === 'away')) { S.cpAt = c; checkpoint(); } }
   // 3. halfway: a deer, close, to make you jump
-  if (S.follow && !S.deer && progress() > 0.5 && CR.st === 'follow') { S.deer = true; spawnDeer(11 + R() * 3); }
-  // 4. near the camp: it is standing on the path ahead, between you and the fire
-  if (S.follow && !S.posed && P.y < PEND + 60 && CR.st === 'follow') {
+  if (S.follow && !S.deer && progress() > 0.5 && CR.st === 'away') { S.deer = true; spawnDeer(11 + R() * 3, false); }
+  // 4. near the camp: it is standing beside the path ahead, between you and the fire, eyes shut
+  if (S.follow && !S.posed && P.y < PEND + 60 && (CR.st === 'away' || CR.st === 'lurk')) {
     S.posed = true;
     const y = P.y - 17, x = pathX(y) + (R() < 0.5 ? -1 : 1) * 2.4, p = placeFree(x, y);
-    if (p) { CR.x = p[0]; CR.y = p[1]; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); CR.eyes = false; CR.nextSnd = 0; CR.harmless = false; setCr('posing'); }
+    if (p) { placeCr(p, 'stare'); CR.sd = 15; CR.eyes = true; CR.eyesShut = true; CR.spotted = false; CR.slow = false; CR.tol = newTolerance(false); setPhase('enc'); }
   }
-  // the den: it doesn't like you here. Its attention climbs, and it comes up behind you
+  // the den: it doesn't like you here. It's out there, then it's right behind you
   if (S.follow && Math.hypot(P.x - DEN.x, P.y - DEN.y) < 11) {
-    if (!S.den) { S.den = true; snd.stinger(false); fear = Math.max(fear, 0.6); }
-    S.denT += dt; if (CR.st !== 'away') CR.A = Math.min(0.92, CR.A + dt * 0.035);
-    if (S.denT > 6 && !S.denBehind && CR.st === 'follow') { S.denBehind = true; evBehind(); }
+    if (!S.den) { S.den = true; snd.stinger(false); fear = Math.max(fear, 0.6); if (CR.st === 'away') startUneasy(); }
+    S.denT += dt;
+    if (S.denT > 6 && !S.denBehind && (CR.st === 'away' || CR.st === 'lurk' || CR.st === 'creep')) {
+      const ax = Math.cos(beam.aim), ay = Math.sin(beam.aim), p = placeFree(P.x - ax * 3.3 + (R() - 0.5), P.y - ay * 3.3 + (R() - 0.5));
+      if (p && beamAt(p[0], p[1]) < 0.05) { S.denBehind = true; placeCr(p, 'stare'); CR.sd = 3.4; CR.slow = true; CR.eyes = true; CR.eyesShut = false; CR.spotted = false; CR.tol = 0.8 + R() * 1.6; CR.nextBr = 0.6; setPhase('enc'); }
+    }
   }
   // 5. the camp: it won't come near the fire
   if (S.phase === 'path' && Math.hypot(P.x - CAMP.x, P.y - CAMP.y) < 11) {
-    S.phase = 'camp'; S.follow = false;
-    if (CR.st !== 'away' && CR.st !== 'hunt') retreat();
+    S.phase = 'camp'; S.follow = false; setPhase('off');
+    if (CR.st !== 'away' && CR.st !== 'flee') react('run');
   }
   if (S.phase === 'camp' && !S.talked && Math.hypot(P.x - CAMPER.x, P.y - CAMPER.y) < 3.4) { S.talked = true; startTalk(CAMPER_LINES, endChapter); }
 }
+// ---------------- checkpoints ----------------
+let CP = null;
+function checkpoint() { CP = { x: P.x, y: P.y, face: P.face, aim: P.aim, lvl: D.lvl, S: Object.assign({}, S), crit: critT }; }
+function respawn() {
+  if (!CP) { start(); return; }
+  Object.assign(P, { x: CP.x, y: CP.y, aim: CP.aim, aimT: CP.aim, face: CP.face, vx: 0, vy: 0, stam: 1, mode: 'still' });
+  Object.assign(S, CP.S); S.denBehind = S.denBehind || S.den; // the den only does that once
+  CR.st = 'away'; CR.x = CR.y = 1e6; CR.eyes = false; CR.eyesShut = false; CR.lastR = null; CR.fours = false; DEER.on = false; critters = []; owl = null;
+  D.lvl = Math.max(0, CP.lvl - 0.25); D.mute = 0; fear = 0.1; lightOn = true; syncBtns();
+  if (S.follow && S.phase === 'path') { setPhase('calm', 38 + R() * 14); D.falseT = -1; } else setPhase('off'); // a proper breather after it gets you
+  cam.x = P.x; cam.y = P.y; mode = 'play'; fadeIn = 1.6; hud(true);
+}
+// ---------------- pacing ----------------
+// The woods breathe in waves: calm (it's elsewhere; a deer, a snap, nothing), uneasy (it's out there,
+// keeping pace; the crickets thin out), then an encounter. Drive it off and the woods go calm again.
+function setPhase(ph, dur = 0) { D.phase = ph; D.pt = 0; D.pdur = dur; }
+function endEncounter() {
+  if (!S.follow || S.phase !== 'path') { setPhase('off'); return; }
+  D.lvl = clamp(D.lvl + (CR.sd > 14 ? 0.1 : 0.2), 0, 1);
+  setPhase('calm', 18 + R() * 16); D.falseT = R() < 0.75 ? 7 + R() * (D.pdur - 12) : -1;
+}
+function startUneasy() {
+  const p = darkSpot(28); if (!p) return false;
+  placeCr(p, 'lurk'); CR.sd = 26 + R() * 4; CR.eyes = true; CR.eyesShut = false; CR.spotted = false; CR.slow = false; CR.fours = false;
+  setPhase('uneasy', 10 + R() * 9); return true;
+}
+function startEncounter() {
+  const w = { creep: 3, ahead: 1.3, shadow: 1 + D.lvl * 2 };
+  let sum = 0; for (const k in w) sum += w[k]; let r = R() * sum, kind = 'creep'; for (const k in w) { r -= w[k]; if (r <= 0) { kind = k; break; } }
+  D.encounters++; setPhase('enc');
+  if (kind === 'ahead') {
+    const dd = lerp(16, 9, D.lvl) + R() * 2, base = beam.out > 0.05 ? beam.aim : P.face, a = base + (R() < 0.5 ? -1 : 1) * beam.hw * (0.7 + R() * 0.5);
+    const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd);
+    if (p && !safeFire(p[0], p[1], 2)) { placeCr(p, 'stare'); CR.sd = dd; CR.eyesShut = R() < 0.4; CR.tol = newTolerance(false); return; }
+  }
+  if (kind === 'shadow') { CR.sd = lerp(14, 8, D.lvl); CR.tol = newTolerance(true); setCr('shadow'); return; }
+  CR.sd = lerp(11, 4.5, D.lvl) * (0.85 + R() * 0.3); setCr('creep');
+}
+// a snap and a crash behind you... a deer. Or a raccoon in the leaves. Or an owl, close.
+function falseAlarm() {
+  const r = R();
+  if (r < 0.5 && !DEER.on) {
+    const p = darkSpot(11 + R() * 4); if (!p) return;
+    snd.twig(p[0], p[1], 1.3); fear = Math.max(fear, 0.45);
+    const a = Math.atan2(p[1] - P.y, p[0] - P.x);
+    Object.assign(DEER, { on: true, x: p[0], y: p[1], a, st: 'flee', t: 0, litT: 0, stepT: 0, quiet: false });
+    setTimeout(() => { if (DEER.on) snd.deer(DEER.x, DEER.y); }, 250);
+  } else if (r < 0.8) spawnCritter(true);
+  else { const a = R() * TAU; snd.owl(P.x + Math.cos(a) * 9, P.y + Math.sin(a) * 9); }
+}
 function director(dt) {
-  D.t += dt;
-  D.heat = beam.out > 0.05 ? Math.min(1, D.heat + dt / 25) : Math.max(0, D.heat - dt / 12);
-  D.bold = Math.min(1, D.bold + dt / 900);
-  // crickets fall silent as its attention rises, or while it's close
+  D.t += dt; D.flash = Math.max(0, D.flash - dt * 1.5);
+  // crickets fall silent when it's near
   let mt = 0;
   if (CR.st !== 'away') {
-    mt = sstep(0.3, 0.65, CR.A);
-    if (CR.st === 'hunt' || CR.st === 'search' || CR.st === 'blocked' || CR.st === 'rear') mt = 1;
-    mt = Math.max(mt, sstep(16, 8, crDist()));
+    const d = crDist();
+    mt = CR.st === 'lurk' ? 0.55 : CR.st === 'tease' ? 0.6 : CR.st === 'flee' ? 0.35 : Math.max(0.8, sstep(20, 8, d));
+    if (CR.st === 'lunge' || mode === 'dying') mt = 1;
   }
-  D.mute += (mt - D.mute) * Math.min(1, dt * (mt > D.mute ? 0.8 : 0.25));
-  // harmless sounds that keep you guessing
+  D.mute += (mt - D.mute) * Math.min(1, dt * (mt > D.mute ? 0.7 : 0.2));
+  // now and then, a far-off owl
   D.amb -= dt;
-  if (D.amb <= 0) {
-    D.amb = 14 + R() * 22;
-    const a = R() * TAU, r = 18 + R() * 14;
-    if (R() < 0.4) snd.owl(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r); else snd.rustle(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r, 0.3);
+  if (D.amb <= 0) { D.amb = 35 + R() * 40; const a = R() * TAU, r = 22 + R() * 12; snd.owl(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r); }
+  if (!S.follow || S.phase !== 'path' || D.phase === 'off') return;
+  D.pt += dt;
+  if (D.phase === 'calm') {
+    if (CR.st !== 'away' && CR.st !== 'flee' && CR.st !== 'tease') { setPhase('enc'); return; }
+    D.lvl = Math.max(0, D.lvl - dt * 0.002);
+    if (P.mode === 'run') D.pt += dt * 0.5; // running through the woods draws it sooner
+    if (D.falseT > 0 && D.pt > D.falseT) { D.falseT = -1; falseAlarm(); }
+    if (D.pt > D.pdur && CR.st === 'away') { if (!startUneasy()) D.pdur += 3; }
+  } else if (D.phase === 'uneasy') {
+    if (CR.st === 'away') { setPhase('calm', 10); return; }
+    if (CR.st === 'lurk' && D.pt > D.pdur) startEncounter();
+  } else if (D.phase === 'enc') {
+    if (CR.st === 'away') { endEncounter(); return; }
+    if (D.pt > 75 && CR.st !== 'lunge' && CR.st !== 'flee') react('run'); // it gives up, for now
   }
-  if (CR.st !== 'follow' || !S.follow || S.phase !== 'path') return;
-  D.next -= dt;
-  if (D.next > 0) return;
-  const on = beam.out > 0.3, A = CR.A;
-  const opts = [
-    ['stalk', 3], ['twig', 2], ['deer', DEER.on ? 0 : 1.2], ['glimpse', on ? 2.5 : 0],
-    ['posing', 1.6], ['behind', on && A > 0.35 ? 1.2 + A * 2 : 0],
-  ];
-  let sum = 0; for (const o of opts) sum += o[1];
-  let r = R() * sum, pick = 'stalk';
-  for (const o of opts) { r -= o[1]; if (r <= 0) { pick = o[0]; break; } }
-  const ok = { stalk: evStalk, twig: evTwig, deer: evDeer, glimpse: evGlimpse, posing: evPosing, behind: evBehind }[pick]();
-  if (!ok || CR.st === 'follow') D.next = lerp(22, 9, A) * (0.7 + R() * 0.6);
 }
-function evStalk() {
-  const side = R() < 0.5 ? -1 : 1, a = beam.aim + Math.PI + side * (0.5 + R() * 0.9), r = 12.5 + R() * 4;
-  const p = placeFree(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r); if (!p) return false;
-  CR.x = p[0]; CR.y = p[1]; CR.rad = r; CR.dir = side; CR.dur = 9 + R() * 7; CR.nextSnd = 1.5 + R() * 2; CR.eyes = true; CR.a = a + Math.PI;
-  setCr('stalk'); return true;
-}
-function evGlimpse() {
-  const dd = 11 + R() * 5, ax = Math.cos(beam.aim), ay = Math.sin(beam.aim), side = R() < 0.5 ? -1 : 1;
-  const cx = P.x + ax * dd, cy = P.y + ay * dd, px = -ay * side, py = ax * side;
-  const p = placeFree(cx - px * 8, cy - py * 8); if (!p) return false;
-  CR.x = p[0]; CR.y = p[1]; CR.tx = cx + px * 9; CR.ty = cy + py * 9; CR.a = Math.atan2(py, px); CR.eyes = false;
-  setCr('glimpse'); snd.rustle(CR.x, CR.y, 0.35); return true;
-}
-function evPosing() {
-  const y = P.y - (16 + R() * 6); if (y < PEND + 14) return false;
-  const side = R() < 0.5 ? -1 : 1, x = pathX(y) + side * (3 + R() * 2);
-  const p = placeFree(x, y); if (!p) return false;
-  CR.x = p[0]; CR.y = p[1]; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); CR.eyes = false; CR.nextSnd = 0; CR.harmless = D.sightings <= 1 && D.t < 90;
-  setCr('posing'); return true;
-}
-function evBehind() {
-  const ax = Math.cos(P.aim), ay = Math.sin(P.aim);
-  const p = placeFree(P.x - ax * 3.3 + (R() - 0.5), P.y - ay * 3.3 + (R() - 0.5)); if (!p) return false;
-  CR.x = p[0]; CR.y = p[1]; CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); CR.eyes = true; CR.nextSnd = 0.4;
-  setCr('behind'); return true;
-}
-function evTwig() { const a = beam.aim + Math.PI + (R() - 0.5) * 2.4, r = 8 + R() * 7; snd.twig(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r, 0.9); fear = Math.max(fear, 0.3); return true; }
-function evDeer() { spawnDeer(); return DEER.on; }
-
 function updateFear(dt) {
-  let target = 0.06 + D.mute * 0.12 + (CR.st !== 'away' ? CR.A * 0.25 : 0);
-  if (CR.st !== 'away' && CR.st !== 'follow') { const d = crDist(); target = Math.max(target, sstep(18, 3, d) * 0.75); }
-  if (CR.st === 'hunt' || CR.st === 'blocked' || CR.st === 'rear') target = 1; else if (CR.st === 'search') target = 0.85;
+  let target = 0.06 + D.mute * 0.15;
+  if (CR.st !== 'away') {
+    const d = crDist();
+    if (CR.st === 'creep' || CR.st === 'stare' || CR.st === 'shadow') target = Math.max(target, sstep(18, 3, d) * 0.85);
+    if (CR.st === 'lunge') target = 1;
+  }
   fear += (target - fear) * Math.min(1, dt * (target > fear ? 2 : 0.12));
 }
 
@@ -1091,7 +1102,6 @@ function update(dt) {
   if (mode !== 'play') return;
   director(dt);
   updateCreature(dt);
-  updateAttention(dt);
   updateDeer(dt);
   updateCritters(dt);
   updateFear(dt);
@@ -1232,7 +1242,7 @@ function seg(T, a, b, wm, col, SW) { const A = T(a[0], a[1]), B = T(b[0], b[1]),
 function drawUpright(T0, pose, SW, mouthOpen) {
   const st = pose === 'stoop', rear = pose === 'rear';
   // motion: a stride cycle from distance travelled, plus slow breathing and sway when it stands
-  const ph = CR.ph || 0, mv = CR.mv || 0, tt = tNow + (CR.seed || 0);
+  const ph = CR.ph || 0, mv = mode === 'dying' ? 0 : CR.mv || 0, tt = (mode === 'dying' ? 50 + Math.min(deathT, 0.2) : tNow) + (CR.seed || 0); // it freezes in the air
   const bob = Math.abs(Math.sin(ph)) * 0.11 * mv + Math.sin(tt * 1.6) * 0.035 * (1 - mv), sway = Math.sin(ph) * 0.12 * mv + Math.sin(tt * 0.45) * 0.06 * (1 - mv);
   const T = (x, h) => h > 0.95 ? T0(x + sway * (h / 2), h + bob) : T0(x, h);
   const hip = st ? 1.0 : 1.2, sh = st ? 1.62 : 1.98, shW = 0.36, hy = st ? 1.6 : 2.05, H0 = PAL.hide[0];
@@ -1252,7 +1262,7 @@ function drawUpright(T0, pose, SW, mouthOpen) {
     const wr = rear ? [sg * (shW + 0.36) + swing, sh + 0.62] : [sg * (shW + (st ? 0.17 : 0.07)) + swing * 0.3, (st ? 0.3 : 0.52) + swing];
     seg(T, s0, el, 0.13, H0, SW); seg(T, el, wr, 0.08, H0, SW);
     const dir = rear ? 1 : -1;
-    for (let f = -1; f <= 1; f++) { const tip = [wr[0] + f * 0.07 + sg * 0.03, wr[1] + dir * 0.24], mid = [wr[0] + f * 0.045, wr[1] + dir * 0.14]; seg(T, wr, mid, 0.03, PAL.hide[1], SW); seg(T, mid, tip, 0.02, PAL.claw, SW); }
+    for (let f = -1; f <= 1; f++) { const tip = [wr[0] + f * 0.07 + sg * 0.03, wr[1] + dir * 0.24], mid = [wr[0] + f * 0.045, wr[1] + dir * 0.14]; seg(T, wr, mid, 0.03, H0, SW); seg(T, mid, tip, 0.02, PAL.claw, SW); }
   }
   // head sunk between the shoulders: small skull, a jaw wider than it
   { const c = T(0, hy + 0.03); disc(c[0], c[1], Math.max(1, 0.12 * SW), H0); }
@@ -1274,7 +1284,7 @@ function drawUpright(T0, pose, SW, mouthOpen) {
     }
   }
   const es = Math.max(0.054, 1.7 / SW);
-  CR.eyeP = [T(-es, hy + 0.06), T(es, hy + 0.06)];
+  CR.eyeP = [T(-es, hy + 0.06), T(es, hy + 0.06)]; CR.eyeS = SW;
 }
 function drawFours(sx, sy) {
   // top-down, low: a long body along the way it's facing, arms reaching, antlers spread wide
@@ -1295,20 +1305,28 @@ function drawFours(sx, sy) {
   }
   CR.eyeP = [Q(0.78, -0.17, 0.6), Q(0.78, 0.17, 0.6)];
 }
+function crPose() {
+  if (mode === 'dying') return 'rear';
+  if (CR.st === 'lunge' || CR.fours || (CR.st === 'flee' && (CR.rk === 'snuff' || CR.rk === 'run' || (CR.rk === 'bolt' && CR.rt <= 0)))) return 'fours';
+  return STOOP[CR.st] ? 'stoop' : 'up';
+}
 function drawCreature(dt = 1 / 30) {
   CR.eyeP = null;
   if (CR.st === 'away') { CR.lastX = null; return; }
-  if (CR.lastX != null && dt > 0) { const m = Math.hypot(CR.x - CR.lastX, CR.y - CR.lastY); if (m < 1) { CR.ph = (CR.ph || 0) + m * (CR.st === 'hunt' ? 3.2 : 4.2); CR.mv += (clamp(m / dt / 1.6, 0, 1) - (CR.mv || 0)) * Math.min(1, dt * 8); } }
+  if (CR.lastX != null && dt > 0) { const m = Math.hypot(CR.x - CR.lastX, CR.y - CR.lastY); if (m < 1) { CR.ph = (CR.ph || 0) + m * (crPose() === 'fours' ? 3.2 : 4.2); CR.mv += (clamp(m / dt / 1.6, 0, 1) - (CR.mv || 0)) * Math.min(1, dt * 8); } }
   CR.lastX = CR.x; CR.lastY = CR.y; if (CR.seed == null) CR.seed = R() * 100;
-  const [sx, sy] = s2(CR.x, CR.y); if (!onScr(sx, sy, 40)) return;
-  const dying = mode === 'dying', pose = dying || CR.st === 'rear' ? 'rear' : CR.st === 'hunt' ? 'fours' : STOOP[CR.st] ? 'stoop' : 'up';
+  let [sx, sy] = s2(CR.x, CR.y);
+  const dying = mode === 'dying', pose = crPose();
+  if (dying) { sx = W / 2 + (R() - 0.5) * shake * 7; sy = H + 34 + (R() - 0.5) * shake * 5; } // full screen, in your face
+  else if (!onScr(sx, sy, 40)) return;
+  if (CR.st === 'flee' && CR.rk === 'hold') { sx += (R() - 0.5) * 1.6; sy += (R() - 0.5) * 0.8; } // it flinches
   OV = [CR.x, CR.y];
   if (pose === 'fours') drawFours(sx, sy);
   else {
     // upright, it stands "up" along the same lean as the trees; drawn ~1.4x life so it reads
-    const big = dying || CR.st === 'rear';
+    const big = dying, zk = dying ? sstep(0, 0.18, deathT) : 0;
     let [lx, ly] = leanV(sx, sy, 1); if (big) { lx = 0; ly = -1; }
-    const L = Math.hypot(lx, ly) || 1, ux = lx / L, uy = ly / L, SW = dying ? 34 : big ? 24 : 12.5, SH = dying ? 30 : big ? 21 : 10.5;
+    const L = Math.hypot(lx, ly) || 1, ux = lx / L, uy = ly / L, SW = dying ? lerp(24, 92, zk) : 12.5, SH = dying ? lerp(21, 78, zk) : 10.5;
     const T = (xm, hm) => [sx + -uy * xm * SW + ux * hm * SH, sy + ux * xm * SW + uy * hm * SH];
     drawUpright(T, pose, SW, pose === 'rear');
   }
@@ -1405,12 +1423,14 @@ function render(dt) {
   drawProps();
   drawDeer();
   drawCritters();
-  drawCreature(dt);
-  if (mode !== 'title') drawPlayer();
+  const dying = mode === 'dying';
+  if (!dying) drawCreature(dt);
+  if (mode !== 'title' && !dying) drawPlayer();
   const tv = []; near(solidG, camX, camY, Math.max(hwM, hhM) + 4, o => { if (o.t === 'tree') tv.push(o); });
   tv.sort((a, b) => ((a.x - camX) ** 2 + (a.y - camY) ** 2) - ((b.x - camX) ** 2 + (b.y - camY) ** 2));
   for (const o of tv) drawTree(o);
   for (const o of vis) if (o.bush) drawBush(o);
+  if (dying) drawCreature(dt); // nothing between you and it
   for (const rf of reflectors) { const [sx, sy] = s2(rf.x, rf.y); if (sx >= 0 && sy >= 0 && sx < W && sy < H) ob[(sy | 0) * W + (sx | 0)] = PAL.refl; }
   shade();
   overlays();
@@ -1499,14 +1519,18 @@ function eyes(x, y, a, sep, col, I) {
 }
 function overlays() {
   // eyeshine: big, self-lit when the beam finds them, and it catches the light from much farther than the beam lights the ground
-  if (CR.st !== 'away' && CR.eyes && CR.eyeP) {
+  if (CR.st !== 'away' && CR.eyes && !CR.eyesShut && CR.eyeP) {
     const face = Math.cos(wrapA(Math.atan2(P.y - CR.y, P.x - CR.x) - CR.a));
     let I = beamAt(CR.x, CR.y, 3.2) * 2.6 * sstep(0.2, 0.7, face);
-    const red = mode === 'dying'; if (red || CR.st === 'rear') I = 1;
-    if (I > 0.04) for (const [ex, ey] of CR.eyeP) {
-      const c = red ? [255, 70, 50] : [255, 250, 230], h = red ? [150, 30, 20] : [160, 150, 118], v = clamp(I, 0, 1), big = red ? 2 : 1;
+    const red = mode === 'dying'; if (red) I = 1;
+    if (red) for (const [ex, ey] of CR.eyeP) { // huge and white, in your face
+      const r = Math.max(2, CR.eyeS * 0.034), g = r * 2.2;
+      for (let oy = -g; oy <= g; oy++) for (let ox = -g; ox <= g; ox++) { const q = Math.hypot(ox, oy); if (q <= r) px1(ex + ox, ey + oy, 255, 255, 250, 1); else if (q <= g) px1(ex + ox, ey + oy, 220, 225, 215, 0.45 * (1 - (q - r) / (g - r))); }
+    }
+    else if (I > 0.04) for (const [ex, ey] of CR.eyeP) {
+      const c = red ? [255, 255, 250] : [255, 250, 230], h = red ? [210, 210, 200] : [160, 150, 118], v = clamp(I, 0, 1), big = red ? 3 : 1;
       for (let oy = -big; oy <= big; oy++) for (let ox = -big; ox <= big; ox++) { if (ox || oy) px1(ex + ox, ey + oy, h[0], h[1], h[2], v * 0.4); }
-      px1(ex, ey, c[0], c[1], c[2], v); if (red) { px1(ex + 1, ey, c[0], c[1], c[2], 1); px1(ex, ey + 1, c[0], c[1], c[2], 1); }
+      px1(ex, ey, c[0], c[1], c[2], v); if (red) for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) px1(ex + ox, ey + oy, c[0], c[1], c[2], 1);
     }
   }
   for (const c of critters) { // small animals' eyes: low, close-set, green or red
@@ -1541,11 +1565,12 @@ function overlays() {
   // sound marks: a faint ring where something made a noise
   for (const rp of ripples) {
     const [sx, sy] = s2(rp.x, rp.y), rr = (0.3 + rp.t * 2) * PPM, a = (1 - rp.t / 0.7) * 0.22 * rp.s;
-    if (a <= 0) continue;
+    if (a <= 0 || beamAt(rp.x, rp.y, 1.2) < 0.04) continue; // only visible in the light
     const n = Math.max(8, rr * 3 | 0);
     for (let k = 0; k < n; k++) if ((k & 1) === 0) { const t = k / n * TAU; px1(sx + Math.cos(t) * rr, sy + Math.sin(t) * rr, 200, 200, 190, a); }
   }
-  if (mode === 'dying' && deathT > 0.75) out32.fill(BLACK);
+  if (mode === 'dying' && deathT > 1.25) out32.fill(BLACK);
+  if (fadeIn > 0 && mode === 'play') { const f = clamp(fadeIn / 1.2, 0, 1); for (let i = 0; i < out32.length; i++) if (BAY[((i / W | 0) & 3) << 2 | (i % W & 3)] < f) out32[i] = BLACK; }
   if (mode === 'chapter') { const f = clamp(wonT / 2, 0, 1); if (f > 0) for (let i = 0; i < out32.length; i++) if (BAY[((i / W | 0) & 3) << 2 | (i % W & 3)] < f) out32[i] = BLACK; }
 }
 
@@ -1562,7 +1587,7 @@ const HOWTO = `<ul>
 <li><b>The battery sags</b> the longer it runs. Switch it off and it comes back. FAR throws the beam farther but drains it fast.</li>
 <li><b>In the dark your eyes adjust</b> and the woods come up faintly, but only where moonlight gets through. Under thick trees you'll need the light.</li>
 <li><b>Reflectors</b> on the trees mark the trail. They only shine back when the beam finds them.</li>
-<li><b>Something follows you.</b> A glance is fine. Don't stare at it, and don't be loud near it. When the crickets stop, it's close.</li>
+<li><b>Something is out there with you.</b> It doesn't like the light. When the crickets stop, it's close.</li>
 <li><b>If it comes for you,</b> sprint, put trees between you, or go dark and keep still. Fires keep it away.</li>
 </ul>`;
 function title() {
@@ -1575,9 +1600,9 @@ function resetRun() {
   runSeed = (Math.random() * 1e9) | 0; buildWorld(runSeed);
   Object.assign(P, { x: CAR.x - 1.7, y: CAR.y - 0.4, aim: -Math.PI / 2, aimT: -Math.PI / 2, vx: 0, vy: 0, stam: 1, mode: 'still', face: -Math.PI / 2 });
   Object.assign(bat, { c: 1, r: 1, dead: false, force: 0, nextFl: 35 + R() * 30, flT: 0, plant: false });
-  Object.assign(D, { t: 0, next: 30, bold: 0, sightings: 0, hunts: 0, bluffs: 0, heat: 0, amb: 12, mute: 0 });
+  Object.assign(D, { t: 0, phase: 'off', pt: 0, pdur: 0, lvl: 0, falseT: -1, flash: 0, lastOff: -9, sightings: 0, encounters: 0, saves: 0, deaths: 0, amb: 25, mute: 0 }); CP = null;
   Object.assign(S, { phase: 'road', follow: false, teased: false, deer: false, posed: false, talked: false, den: false, denT: 0, denBehind: false }); critters = []; owl = null; critT = 14;
-  CR.A = 0; CR.st = 'away'; CR.x = CR.y = 1e6; CR.eyeP = null; DEER.on = false; ripples = []; talk = null; talkEl.hidden = true;
+  CR.st = 'away'; CR.lastR = null; CR.fours = false; CR.eyesShut = false; CR.x = CR.y = 1e6; CR.eyeP = null; DEER.on = false; ripples = []; talk = null; talkEl.hidden = true;
   lightOn = true; narrow = false; fear = 0.05; runTime = 0; wonT = 0; adapt = 0; cam.x = P.x; cam.y = P.y - 3; syncBtns();
 }
 function start() {
@@ -1591,7 +1616,7 @@ function start() {
 function pause() { if (mode !== 'play' && mode !== 'pause') return; mode = 'pause'; stick.move = stick.aim = null; stL.hidden = stR.hidden = true; showCard(`<h2>Paused</h2><p class="dim">Chapter 1 &middot; ${CH.name} &middot; ${Math.round(progress() * 100)}%</p>`); row(btn('Keep going', resume, true), btn('Start over', start), btn('How to play', howto), btn(soundOn ? 'Sound on' : 'Sound off', () => { soundOn = !soundOn; if (master) master.gain.value = soundOn ? 0.9 : 0; pause(); })); }
 function resume() { mode = 'play'; hideCard(); hud(true); }
 const fmtT = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-function stats() { return `<div class="stats"><div><b>${fmtT(runTime)}</b>time</div><div><b>${D.sightings}</b>times you saw it</div><div><b>${D.hunts}</b>times it came for you</div></div>`; }
+function stats() { return `<div class="stats"><div><b>${fmtT(runTime)}</b>time</div><div><b>${D.sightings}</b>times you saw it</div><div><b>${D.saves}</b>times you lit it in time</div></div>`; }
 function endChapter() { mode = 'chapter'; wonT = 0; hud(false); fear = 0; snd.win(); }
 function chapterCard() {
   showCard(`<p class="dim">End of Chapter 1</p><h2 class="good">${CH.name}</h2><p>The camper feeds the fire and doesn't look at the trees. Up the trail, past where the light reaches, is the ranger station.</p>${stats()}<p class="dim">Chapter 2, the ranger station, is next.</p>`, true);
@@ -1610,10 +1635,11 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 function step(dt) {
+  if (fadeIn > 0) fadeIn -= dt;
   if (mode === 'play') update(dt);
   else if (mode === 'talk') { typeTalk(dt); updateBattery(dt); buildShadows(); P.aim += clamp(wrapA(Math.atan2(CAMPER.y - P.y, CAMPER.x - P.x) - P.aim), -3 * dt, 3 * dt); fear += (0.05 - fear) * dt * 0.5; }
   else if (mode === 'title') { P.aim = -Math.PI / 2 + Math.sin(tNow * 0.35) * 0.9; P.aimT = P.aim; lightOn = true; updateBattery(dt); bat.c = 1; buildShadows(); }
-  else if (mode === 'dying') { deathT += dt; beam.out = deathT < 0.7 ? 1 : 0; beam.hw = 0.6; beam.R = 9; beam.cosO = Math.cos(0.84); beam.aim = P.aim; buildShadows(); if (deathT > 1.8 && card.hidden) endCard(); }
+  else if (mode === 'dying') { deathT += dt; beam.out = deathT < 1.25 ? 1 : 0; beam.hw = 0.6; beam.R = 9; beam.cosO = Math.cos(0.84); beam.aim = P.aim; buildShadows(); if (deathT > 2.6) respawn(); }
   else if (mode === 'chapter') { wonT += dt; if (wonT > 2.4 && card.hidden) chapterCard(); }
   for (const rp of ripples) rp.t += dt; ripples = ripples.filter(r => r.t < 0.7);
   audioTick(dt);
@@ -1626,7 +1652,7 @@ setTimeout(() => {
   P.x = CAR.x - 1.7; P.y = CAR.y - 0.4; cam.x = P.x; cam.y = P.y - 6; mode = 'title'; title();
   requestAnimationFrame(frame);
 }, 30);
-window.HP = { keys, get cam() { return cam; }, HOLD, toggleLight, get lightOn() { return lightOn; }, P, CR, D, S, bat, beam, DEER, get adapt() { return adapt; }, set adapt(v) { adapt = v; }, get mode() { return mode; }, set mode(v) { mode = v; }, hideCard, resume, start, step, update, render, evPosing, evBehind, evStalk, evGlimpse, startHunt, goAway, pathX, roadX, spawnDeer, nextLine, get talk() { return talk; }, get fires() { return fires; }, get CAMP() { return CAMP; }, get CAMPER() { return CAMPER; }, get BRIDGE() { return BRIDGE; }, get CAR() { return CAR; }, PEND, PY0, CREEKY };
+window.HP = { keys, get cam() { return cam; }, HOLD, toggleLight, get lightOn() { return lightOn; }, P, CR, D, S, bat, beam, DEER, get adapt() { return adapt; }, set adapt(v) { adapt = v; }, get mode() { return mode; }, set mode(v) { mode = v; }, hideCard, resume, start, step, update, render, startUneasy, startEncounter, react, setPhase, checkpoint, respawn, get CP() { return CP; }, get critters() { return critters; }, pathX, roadX, spawnDeer, nextLine, get talk() { return talk; }, get fires() { return fires; }, get CAMP() { return CAMP; }, get CAMPER() { return CAMPER; }, get BRIDGE() { return BRIDGE; }, get CAR() { return CAR; }, PEND, PY0, CREEKY };
 
 </script>
 
