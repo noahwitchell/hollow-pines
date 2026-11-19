@@ -881,14 +881,14 @@ function heal(n) {
   if (P.hp >= HPMAX) return; P.hp = Math.min(HPMAX, P.hp + n); snd.heal(); syncHP(true);
 }
 const hpEl = $('hp');
-function syncHP(flash) {
-  const segs = hpEl.children;
-  for (let i = 0; i < segs.length; i++) segs[i].className = i < P.hp ? '' : 'gone';
-  const show = P.hp < HPMAX && (mode === 'play' || mode === 'talk' || mode === 'dying');
-  if (show) { hpEl.hidden = false; hpEl.style.opacity = '1'; }
-  else if (!hpEl.hidden && P.hp >= HPMAX && flash) { hpEl.style.opacity = '1'; setTimeout(() => { if (P.hp >= HPMAX) hpEl.style.opacity = '0'; }, 2600); setTimeout(() => { if (P.hp >= HPMAX) hpEl.hidden = true; }, 3400); }
-  else if (!show) hpEl.hidden = true;
-  if (flash) { hpEl.classList.remove('hit'); void hpEl.offsetWidth; hpEl.classList.add('hit'); }
+let hpTok = 0;
+function syncHP(flash) { // the bar only shows when your health changes, then fades away
+  hpEl.firstElementChild.style.width = (P.hp / HPMAX * 100) + '%';
+  if (!flash) { if (mode !== 'play' && mode !== 'talk' && mode !== 'dying') hpEl.hidden = true; return; }
+  const tok = ++hpTok; hpEl.hidden = false; hpEl.style.opacity = '1';
+  hpEl.classList.remove('hit'); void hpEl.offsetWidth; hpEl.classList.add('hit');
+  setTimeout(() => { if (tok === hpTok) hpEl.style.opacity = '0'; }, 3200);
+  setTimeout(() => { if (tok === hpTok) hpEl.hidden = true; }, 4100);
 }
 function spawnDeer(dd = 18 + R() * 7, quiet = true) {
   const a = (beam.out > 0.2 ? beam.aim : P.face) + (R() - 0.5) * 0.4;

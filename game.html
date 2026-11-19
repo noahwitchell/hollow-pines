@@ -54,12 +54,11 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
 #talk.you b{color:var(--dim)}
 #talk p{margin:2px 0 0;font-size:22px;line-height:1.15;color:var(--ink)}
 #talk span{position:absolute;right:12px;bottom:6px;font-size:15px;color:var(--dim);letter-spacing:.1em}
-#hp{position:absolute;left:calc(var(--sl) + 48px);top:calc(var(--st) + 14px);display:flex;gap:5px;pointer-events:none;transition:opacity .8s;z-index:5}
-#hp i{display:block;width:22px;height:8px;background:var(--red);border:2px solid #5a221a}
-#hp i.gone{background:transparent;border-color:#3a2420}
+#hp{position:absolute;left:50%;top:calc(var(--st) + 4px);transform:translateX(-50%);width:min(52%,560px);height:4px;background:rgba(58,36,32,.55);pointer-events:none;transition:opacity .8s;z-index:5}
+#hp i{display:block;height:100%;width:100%;background:var(--red);transition:width .5s ease-out}
 #hp.hit{animation:hpHit .9s steps(6)}
 @keyframes hpHit{0%,32%,66%{filter:brightness(2.2)}16%,50%,100%{filter:none}}
-#note{position:absolute;left:50%;top:calc(var(--st) + 8px);transform:translateX(-50%);width:min(560px,calc(100% - var(--sl) - var(--sr) - 120px));box-sizing:border-box;padding:6px 14px 8px;background:rgba(4,5,8,.72);border:2px solid var(--line);font-size:20px;line-height:1.15;color:var(--ink);text-align:center;text-wrap:balance;pointer-events:none;transition:opacity .8s;z-index:6}
+#note{position:absolute;left:50%;top:calc(var(--st) + 16px);transform:translateX(-50%);width:min(560px,calc(100% - var(--sl) - var(--sr) - 120px));box-sizing:border-box;padding:6px 14px 8px;background:rgba(4,5,8,.72);border:2px solid var(--line);font-size:20px;line-height:1.15;color:var(--ink);text-align:center;text-wrap:balance;pointer-events:none;transition:opacity .8s;z-index:6}
 @media (prefers-reduced-motion: reduce){.hint,#hp,#note{transition:none}#hp.hit{animation:none}}
 </style>
 <div id="app">
@@ -71,7 +70,7 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   <div class="hint" id="hintL" hidden>WALK</div>
   <div class="hint" id="hintR" hidden>AIM</div>
   <div id="talk" hidden><b id="talkWho"></b><p id="talkText"></p><span>TAP</span></div>
-  <div id="hp" hidden><i></i><i></i><i></i></div>
+  <div id="hp" hidden><i></i></div>
   <div id="note" hidden></div>
   <button id="pauseBtn" aria-label="Pause" hidden>II</button>
   <div id="rbtns" hidden>
@@ -965,14 +964,14 @@ function heal(n) {
   if (P.hp >= HPMAX) return; P.hp = Math.min(HPMAX, P.hp + n); snd.heal(); syncHP(true);
 }
 const hpEl = $('hp');
-function syncHP(flash) {
-  const segs = hpEl.children;
-  for (let i = 0; i < segs.length; i++) segs[i].className = i < P.hp ? '' : 'gone';
-  const show = P.hp < HPMAX && (mode === 'play' || mode === 'talk' || mode === 'dying');
-  if (show) { hpEl.hidden = false; hpEl.style.opacity = '1'; }
-  else if (!hpEl.hidden && P.hp >= HPMAX && flash) { hpEl.style.opacity = '1'; setTimeout(() => { if (P.hp >= HPMAX) hpEl.style.opacity = '0'; }, 2600); setTimeout(() => { if (P.hp >= HPMAX) hpEl.hidden = true; }, 3400); }
-  else if (!show) hpEl.hidden = true;
-  if (flash) { hpEl.classList.remove('hit'); void hpEl.offsetWidth; hpEl.classList.add('hit'); }
+let hpTok = 0;
+function syncHP(flash) { // the bar only shows when your health changes, then fades away
+  hpEl.firstElementChild.style.width = (P.hp / HPMAX * 100) + '%';
+  if (!flash) { if (mode !== 'play' && mode !== 'talk' && mode !== 'dying') hpEl.hidden = true; return; }
+  const tok = ++hpTok; hpEl.hidden = false; hpEl.style.opacity = '1';
+  hpEl.classList.remove('hit'); void hpEl.offsetWidth; hpEl.classList.add('hit');
+  setTimeout(() => { if (tok === hpTok) hpEl.style.opacity = '0'; }, 3200);
+  setTimeout(() => { if (tok === hpTok) hpEl.hidden = true; }, 4100);
 }
 function spawnDeer(dd = 18 + R() * 7, quiet = true) {
   const a = (beam.out > 0.2 ? beam.aim : P.face) + (R() - 0.5) * 0.4;
