@@ -1592,7 +1592,7 @@ function paintFace() {
             const cxu = tu + t.tilt * along * dir * 0.6, half = t.w * (1 - along / L2);
             const du = u - cxu; if (Math.abs(du) > half) continue;
             const k = (0.62 + 0.38 * (1 - along / L2)) * 0.1; let tr = 214 * k, tg = 202 * k, tb = 190 * k; // barely there: a shadow of teeth
-            if (hash2(t.t * 97 | 0, top ? 1 : 2) > 0.45 && du < -half * 0.35 && du > -half * 0.8 && along > L2 * 0.25 && along < L2 * 0.7) { tr = 120; tg = 136; tb = 160; } // a catch of moonlight
+            if (du < -half * 0.25) { tr *= 1.7; tg *= 1.75; tb *= 1.85; } // the left edge catches a little moonlight
             if (along < 0.012) { tr *= 0.6; tg *= 0.5; tb *= 0.45; }
             return [tr, tg, tb];
           }
