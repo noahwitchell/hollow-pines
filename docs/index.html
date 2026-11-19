@@ -485,14 +485,58 @@ function initAudio() {
   windG = AC.createGain(); windG.gain.value = 0.05; ws.connect(wf).connect(windG).connect(master); ws.start();
   // crickets
   crickBus = AC.createGain(); crickBus.gain.value = 0; crickBus.connect(master);
-  for (let i = 0; i < 7; i++) {
-    const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = 4100 + Math.random() * 1300;
-    const g = AC.createGain(); g.gain.value = 0;
-    let dest = crickBus;
-    if (AC.createStereoPanner) { const p = AC.createStereoPanner(); p.pan.value = (Math.random() * 2 - 1) * 0.85; p.connect(crickBus); dest = p; }
-    o.connect(g).connect(dest); o.start();
-    crickets.push({ g, next: AC.currentTime + Math.random() * 2, vol: 0.012 + Math.random() * 0.02, gap: 0.6 + Math.random() * 0.9, n: 2 + (Math.random() * 3 | 0) });
+  crickets = makeCrickets(AC, crickBus);
+}
+// Crickets, modeled loosely on the real thing: field crickets chirp in quick bursts of 3-5 tiny pulses,
+// each one with its own steady rhythm; far off, tree crickets trill in long, soft phrases.
+function makeCrickets(ac, bus) {
+  const out = [], rr = Math.random;
+  const pan = (node, p) => { if (!ac.createStereoPanner) { node.connect(bus); return; } const pn = ac.createStereoPanner(); pn.pan.value = p; node.connect(pn); pn.connect(bus); };
+  for (let i = 0; i < 6; i++) { // field crickets: two near, the rest further off
+    const near = i < 2, f = 4300 + rr() * 900;
+    const g = ac.createGain(); g.gain.value = 0;
+    const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = ac.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2;
+    const h = ac.createGain(); h.gain.value = near ? 0.16 : 0.05; // a little second harmonic = the scratchy edge
+    o.connect(g); o2.connect(h).connect(g);
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = near ? 12000 : 6500; g.connect(lp);
+    pan(lp, (rr() * 2 - 1) * (near ? 0.7 : 0.95));
+    o.start(); o2.start();
+    const pl = 0.014 + rr() * 0.008;
+    out.push({ k: 'chirp', g, o, o2, f, next: ac.currentTime + rr() * 1.5,
+      vol: near ? 0.026 + rr() * 0.018 : 0.007 + rr() * 0.009,
+      per: 0.42 + rr() * 0.5, n: 3 + (rr() * 3 | 0), pl, ps: pl + 0.011 + rr() * 0.008 });
   }
+  for (let i = 0; i < 2; i++) { // distant tree-cricket trills
+    const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = 2700 + rr() * 600;
+    const am = ac.createGain(); am.gain.value = 0.5;
+    const lfo = ac.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 38 + rr() * 18;
+    const dep = ac.createGain(); dep.gain.value = 0.5; lfo.connect(dep).connect(am.gain);
+    const g = ac.createGain(); g.gain.value = 0;
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3600;
+    o.connect(am).connect(g).connect(lp); pan(lp, (rr() * 2 - 1) * 0.8);
+    o.start(); lfo.start();
+    out.push({ k: 'trill', g, next: ac.currentTime + 1 + rr() * 4, vol: 0.005 + rr() * 0.004 });
+  }
+  return out;
+}
+function schedCricket(c, t) {
+  if (t + 0.3 < c.next) return;
+  const st = Math.max(c.next, t + 0.02), rr = Math.random;
+  if (c.k === 'trill') { // a phrase of a few seconds, then a rest
+    const len = 1.5 + rr() * 4, v = c.vol * (0.8 + rr() * 0.4);
+    c.g.gain.setValueAtTime(0, st); c.g.gain.linearRampToValueAtTime(v, st + 0.35); c.g.gain.setValueAtTime(v, st + len); c.g.gain.linearRampToValueAtTime(0, st + len + 0.5);
+    c.next = st + len + 1 + rr() * 6; return;
+  }
+  const v = c.vol * (0.85 + rr() * 0.3);
+  for (let i = 0; i < c.n; i++) {
+    const a = st + i * c.ps, e = c.pl, pv = v * (0.65 + 0.35 * Math.min(1, i / 2)); // the first pulse or two come in softer
+    c.g.gain.setValueAtTime(0, a); c.g.gain.linearRampToValueAtTime(pv, a + e * 0.3); c.g.gain.linearRampToValueAtTime(pv * 0.6, a + e * 0.8); c.g.gain.linearRampToValueAtTime(0, a + e);
+    c.o.frequency.setValueAtTime(c.f * 1.012, a); c.o.frequency.linearRampToValueAtTime(c.f * 0.985, a + e); // each pulse sags slightly in pitch
+    c.o2.frequency.setValueAtTime(c.f * 2.024, a); c.o2.frequency.linearRampToValueAtTime(c.f * 1.97, a + e);
+  }
+  // a steady personal rhythm, with the odd pause (real crickets stop and start)
+  c.next = st + c.per * (0.96 + rr() * 0.08) + (rr() < 0.05 ? 1.5 + rr() * 4 : 0);
 }
 function wakeAudio() { if (AC && AC.state !== 'running') AC.resume().catch(() => {}); }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) wakeAudio(); else if (mode === 'play') pause(); });
@@ -566,13 +610,7 @@ function audioTick(dt) {
   // crickets go quiet when it is near
   const cg = (mode === 'play' || mode === 'title') ? 1 - D.mute : 0;
   crickBus.gain.setTargetAtTime(cg, t, 0.6);
-  for (const c of crickets) {
-    if (t + 0.25 > c.next) {
-      const st = Math.max(c.next, t + 0.02);
-      for (let i = 0; i < c.n; i++) { const a = st + i * 0.07; c.g.gain.setValueAtTime(0, a); c.g.gain.linearRampToValueAtTime(c.vol, a + 0.012); c.g.gain.setValueAtTime(c.vol, a + 0.035); c.g.gain.linearRampToValueAtTime(0, a + 0.05); }
-      c.next = st + c.gap + Math.random() * 0.4;
-    }
-  }
+  for (const c of crickets) schedCricket(c, t);
   windG.gain.setTargetAtTime(0.035 + 0.02 * Math.sin(t * 0.2), t, 1);
   // heartbeat
   if (mode === 'play' && t > nextBeat) {
@@ -1354,8 +1392,8 @@ function drawFern(f) {
 }
 function drawBush(b) {
   const [sx, sy] = s2(b.x, b.y), r = b.r * PPM; if (!onScr(sx, sy, r)) return;
-  const sd0 = (b.s * 1e4) | 0;
-  discFn(sx, sy, r, (dx, dy, q, x, y) => { const h = hash2(x + sd0, y * 7); if (q > 0.75 && h < 0.45) return 0; return PAL.bush[(h * 4) | 0]; });
+  const sd0 = (b.s * 1e4) | 0, ox = Math.floor(sx), oy = Math.floor(sy); // leaf pattern pinned to the bush, not the screen
+  discFn(sx, sy, r, (dx, dy, q, x, y) => { const h = hash2(x - ox + sd0, (y - oy) * 7 + 911); if (q > 0.75 && h < 0.45) return 0; return PAL.bush[(h * 4) | 0]; });
 }
 function drawRock(o) {
   const [sx, sy] = s2(o.x, o.y), r = o.r * PPM; if (!onScr(sx, sy, r)) return;
