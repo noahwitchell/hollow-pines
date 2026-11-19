@@ -1681,8 +1681,8 @@ function paintFace() {
             const along = (v - tv) * dir; if (along < -0.01 || along > L2) continue;
             const cxu = tu + t.tilt * along * dir * 0.6, half = t.w * (1 - along / L2);
             const du = u - cxu; if (Math.abs(du) > half) continue;
-            const k = (0.62 + 0.38 * (1 - along / L2) * lit) * 0.34; let tr = 214 * k, tg = 202 * k, tb = 168 * k; // dim: you can just make them out
-            if (du < -half * 0.3 && du > -half * 0.75 && along < L2 * 0.8) { tr = 120; tg = 116; tb = 104; } // wet glint
+            const k = (0.62 + 0.38 * (1 - along / L2)) * 0.1; let tr = 214 * k, tg = 202 * k, tb = 190 * k; // barely there: a shadow of teeth
+            if (hash2(t.t * 97 | 0, top ? 1 : 2) > 0.45 && du < -half * 0.35 && du > -half * 0.8 && along > L2 * 0.25 && along < L2 * 0.7) { tr = 120; tg = 136; tb = 160; } // a catch of moonlight
             if (along < 0.012) { tr *= 0.6; tg *= 0.5; tb *= 0.45; }
             return [tr, tg, tb];
           }
@@ -1699,15 +1699,17 @@ function paintFace() {
     }
   }
   // the eyes: big, round, white-hot, with a feathered haze around each (the brighter of the two wins, so they don't fog together)
-  const rx = 0.2 * Sx, ry = 0.17 * Sy, gl = 0.55 * Sx;
+  const rx = 0.16 * Sx, ry = 0.135 * Sy, gl = 0.55 * Sx;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    let inEye = false, a = 0;
+    let core = 0, a = 0;
     for (const [ex, ey] of eyes) {
       const exx = cx + ex * Sx, eyy = cy + ey * Sy, dx = x - exx, dy = y - eyy; if (Math.abs(dx) > gl + rx || Math.abs(dy) > gl + ry) continue;
-      const k = dx / rx; if (Math.abs(k) < 1 && Math.abs(dy) < ry * Math.sqrt(1 - k * k) * (dy < 0 ? 0.92 : 1)) inEye = true;
-      const q = Math.max(0, Math.hypot(dx / rx, dy / ry) - 1) * rx / gl; if (q < 1) a = Math.max(a, Math.pow(1 - q, 2.6) * 0.68);
+      const e = Math.hypot(dx / rx, dy / (ry * (dy < 0 ? 0.92 : 1)));
+      core = Math.max(core, sstep(1.25, 0.7, e)); // soft edge, not a crisp disc
+      const q = Math.max(0, e - 1) * rx / gl; if (q < 1) a = Math.max(a, Math.pow(1 - q, 2.6) * 0.68);
     }
-    if (inEye) px1(x, y, 255, 255, 248, 1);
+    const v = Math.max(core, a * 0.9);
+    if (core > 0.02) px1(x, y, 255, 255, 248, Math.min(1, v + 0.05));
     else if (a > BAY[((y & 3) << 2) | (x & 3)] * 0.25) px1(x, y, 225, 230, 222, a);
   }
 }
