@@ -155,7 +155,7 @@ const PAL = {
   rock: ['#86837b', '#6f6c65', '#55534d'].map(C), fern: ['#4f6b33', '#5f7c3a', '#3e5628'].map(C),
   bush: ['#3d5a2c', '#4a6833', '#2f4622', '#55703a'].map(C),
   stump: ['#a39c8e', '#8a8477', '#6a655b'].map(C),
-  hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#211d18'), hornHi: C('#3a342a'), tooth: ['#b3a684', '#d8ceb0'].map(C), claw: C('#35302a'), mouth: C('#040303'),
+  hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#211d18'), hornHi: C('#3a342a'), tooth: ['#b3a684', '#d8ceb0'].map(C), claw: C('#35302a'), glint2: C('#f4efe0'), mouth: C('#040303'),
   deer: ['#7d5b3c', '#6a4b30', '#d8cdb8'].map(C), jacket: C('#3f4a5c'), hair: C('#3a2a20'), hand: C('#c9a98a'), torch: C('#d0d0cc'),
   camper: [C('#b8503a'), C('#5a2418'), C('#d9b08c'), C('#262422'), C('#e0d6c0')],
   tent: ['#4f6a52', '#3c5440', '#6b8a6c'].map(C), car: ['#6a4a3c', '#53392e', '#1d2227', '#a8b0b8'].map(C), refl: C('#cfe6f2'),
@@ -1288,7 +1288,7 @@ function drawUpright(T0, pose, SW, mouthOpen) {
   const jd = mouthOpen ? 0.15 : 0;
   fillPoly([[-0.16, hy], [0.16, hy], [0.12, hy - 0.12 - jd], [-0.12, hy - 0.12 - jd]].map(p => T(p[0], p[1])), H0);
   if (mouthOpen) fillPoly([[-0.14, hy - 0.05], [0.14, hy - 0.05], [0.11, hy - 0.05 - jd], [-0.11, hy - 0.05 - jd]].map(p => T(p[0], p[1])), PAL.mouth);
-  if (SW > 16) { for (let i = 0; i < 9; i++) { const x = -0.12 + i * 0.03, L = 0.02 + (i % 4 === 1 ? 0.03 : 0) + hash2(i, 5) * 0.015; seg(T, [x, hy - 0.05], [x + 0.004, hy - 0.05 - L], 0.012, PAL.tooth[i % 2], SW); if (mouthOpen) seg(T, [x + 0.01, hy - 0.05 - jd], [x + 0.01, hy - 0.05 - jd + L * 0.8], 0.012, PAL.tooth[0], SW); } }
+  if (SW > 16) { for (let i = 0; i < 9; i++) { const x = -0.12 + i * 0.03, L = 0.02 + (i % 4 === 1 ? 0.03 : 0) + hash2(i, 5) * 0.015; seg(T, [x, hy - 0.05], [x + 0.004, hy - 0.05 - L], 0.012, PAL.tooth[i % 2], SW); if (SW > 100) seg(T, [x - 0.002, hy - 0.052], [x - 0.001, hy - 0.05 - L * 0.7], 0.003, PAL.glint2, SW); if (mouthOpen) seg(T, [x + 0.01, hy - 0.05 - jd], [x + 0.01, hy - 0.05 - jd + L * 0.8], 0.012, PAL.tooth[0], SW); } }
   else seg(T, [-0.09, hy - 0.06], [0.09, hy - 0.06], 0, PAL.tooth[0], SW);
   // antlers, drawn 1.5x at game scale so they read
   const ka = SW > 30 ? 1 : 1.5;
@@ -1336,16 +1336,19 @@ function drawCreature(dt = 1 / 30) {
   CR.lastX = CR.x; CR.lastY = CR.y; if (CR.seed == null) CR.seed = R() * 100;
   let [sx, sy] = s2(CR.x, CR.y);
   const dying = mode === 'dying', pose = crPose();
-  if (dying) { sx = W / 2 + (R() - 0.5) * shake * 7; sy = H + 34 + (R() - 0.5) * shake * 5; } // full screen, in your face
+  let dSW = 0, dSH = 0;
+  if (dying) { // it slams in until its eyes and teeth fill the screen
+    const zk = sstep(0, 0.2, deathT); dSH = 21 * Math.pow(360 / 21, zk); dSW = dSH * 1.17;
+    sx = W / 2 + (R() - 0.5) * shake * 9; sy = H / 2 + 1.96 * dSH + (R() - 0.5) * shake * 7;
+  }
   else if (!onScr(sx, sy, 40)) return;
   if (CR.st === 'flee' && CR.rk === 'hold') { sx += (R() - 0.5) * 1.6; sy += (R() - 0.5) * 0.8; } // it flinches
   OV = [CR.x, CR.y];
   if (pose === 'fours') drawFours(sx, sy);
   else {
     // upright, it stands "up" along the same lean as the trees; drawn ~1.4x life so it reads
-    const big = dying, zk = dying ? sstep(0, 0.18, deathT) : 0;
-    let [lx, ly] = leanV(sx, sy, 1); if (big) { lx = 0; ly = -1; }
-    const L = Math.hypot(lx, ly) || 1, ux = lx / L, uy = ly / L, SW = dying ? lerp(24, 92, zk) : 12.5, SH = dying ? lerp(21, 78, zk) : 10.5;
+    let [lx, ly] = leanV(sx, sy, 1); if (dying) { lx = 0; ly = -1; }
+    const L = Math.hypot(lx, ly) || 1, ux = lx / L, uy = ly / L, SW = dying ? dSW : 12.5, SH = dying ? dSH : 10.5;
     const T = (xm, hm) => [sx + -uy * xm * SW + ux * hm * SH, sy + ux * xm * SW + uy * hm * SH];
     drawUpright(T, pose, SW, pose === 'rear');
   }
@@ -1614,9 +1617,103 @@ function overlays() {
     const n = Math.max(8, rr * 3 | 0);
     for (let k = 0; k < n; k++) if ((k & 1) === 0) { const t = k / n * TAU; px1(sx + Math.cos(t) * rr, sy + Math.sin(t) * rr, 200, 200, 190, a); }
   }
+  if (mode === 'dying' && deathT > 0.15 && deathT <= 1.25) drawCatchFace(Math.round((R() - 0.5) * shake * 8), Math.round((R() - 0.5) * shake * 6));
   if (mode === 'dying' && deathT > 1.25) out32.fill(BLACK);
   if (fadeIn > 0 && mode === 'play') { const f = clamp(fadeIn / 1.2, 0, 1); for (let i = 0; i < out32.length; i++) if (BAY[((i / W | 0) & 3) << 2 | (i % W & 3)] < f) out32[i] = BLACK; }
   if (mode === 'chapter') { const f = clamp(wonT / 2, 0, 1); if (f > 0) for (let i = 0; i < out32.length; i++) if (BAY[((i / W | 0) & 3) << 2 | (i % W & 3)] < f) out32[i] = BLACK; }
+}
+
+// ---------------- the catch: its face, filling the screen ----------------
+// Painted straight into the frame, lit by your flashlight from just below, in the same few dithered levels as the game.
+// Deep sockets with white burning eyes, a lipless jaw far too wide, rows of crooked wet needle teeth.
+const FACE = (() => {
+  const rr = mulberry32(777), up = [], lo = [];
+  for (let i = 0; i < 26; i++) { const t = i / 25; up.push({ t, L: 0.07 + rr() * 0.17 + (i % 5 === 2 ? 0.08 : 0), w: 0.018 + rr() * 0.02, tilt: (rr() - 0.5) * 0.5 }); }
+  for (let i = 0; i < 23; i++) { const t = (i + 0.5) / 23; lo.push({ t, L: 0.05 + rr() * 0.13, w: 0.016 + rr() * 0.018, tilt: (rr() - 0.5) * 0.5 }); }
+  return { up, lo };
+})();
+// the mouth: corners pulled up toward the cheeks, upper and lower lines as functions of u
+const mouthTop = u => 0.14 - 0.1 * u * u * u * u + 0.04 * u * u;
+const mouthBot = u => 0.78 - 0.62 * u * u;
+let faceCache = null;
+function drawCatchFace(ox, oy) {
+  if (!faceCache || faceCache.length !== out32.length) { paintFace(); faceCache = out32.slice(); }
+  for (let y = 0; y < H; y++) { const sy = y - oy; for (let x = 0; x < W; x++) { const sx = x - ox; out32[y * W + x] = sx >= 0 && sy >= 0 && sx < W && sy < H ? faceCache[sy * W + sx] : BLACK; } }
+}
+function paintFace() {
+  const ox = 0, oy = 0, cx = W / 2 + ox, cy = H / 2 + oy, Sx = H * 0.52, Sy = H * 0.52;
+  const eyes = [[-0.36, -0.3], [0.36, -0.3]];
+  for (let y = 0; y < H; y++) {
+    const v = (y - cy) / Sy, bay = (y & 3) << 2;
+    for (let x = 0; x < W; x++) {
+      const u = (x - cx) / Sx, i = y * W + x;
+      // head silhouette: broad skull, cheekbones flaring, fills most of the frame
+      const gaunt = v > -0.1 && v < 0.5 ? 0.12 * Math.sin((v + 0.1) / 0.6 * Math.PI) : 0, hw = 1.45 - gaunt;
+      const head = (u * u) / (hw * hw) + ((v + 0.05) * (v + 0.05)) / (1.12 * 1.12);
+      let r = 0, g = 0, b = 0;
+      if (head < 1) {
+        // hide: near-black brown with coarse grain and creases
+        const n = vnoise(u * 7 + 3, v * 7) * 0.6 + vnoise(u * 19, v * 19 + 5) * 0.4, crease = Math.abs(Math.sin(v * 22 + vnoise(u * 3, v * 3) * 4)) < 0.12 ? 0.6 : 1;
+        let base = (0.55 + 0.45 * n) * crease;
+        // brow ridge shadow and deep sockets
+        for (const [ex, ey] of eyes) {
+          const du = (u - ex) * Math.cos(ex > 0 ? -0.3 : 0.3) - (v - ey) * Math.sin(ex > 0 ? -0.3 : 0.3), dv = (u - ex) * Math.sin(ex > 0 ? -0.3 : 0.3) + (v - ey) * Math.cos(ex > 0 ? -0.3 : 0.3);
+          const sock = (du * du) / 0.1 + (dv * dv) / 0.04; if (sock < 1) base *= 0.04 + 0.96 * sock * sock * sock;
+        }
+        if (v > -0.52 && v < -0.42 && Math.abs(u) < 0.75) base *= 0.6; // the brow overhang
+        // nostril slits
+        for (const sg of [-1, 1]) { const du = u - sg * 0.09, dv = v + 0.02; if (Math.abs(du - dv * 0.4 * sg) < 0.018 && Math.abs(dv) < 0.06) base *= 0.15; }
+        // flashlight from just below and in front: brighter low and centre, falling off to the edges
+        const lit = clamp(0.95 - 0.55 * Math.hypot(u * 0.75, (v - 0.35) * 0.9), 0.08, 1) * sstep(1, 0.55, head);
+        let L = base * lit * 0.55;
+        r = 48 * L; g = 38 * L; b = 30 * L;
+        // the mouth
+        const mt = mouthTop(u), mb = mouthBot(u);
+        if (Math.abs(u) < 0.92 && v > mt && v < mb) {
+          const edge = Math.min(v - mt, mb - v);
+          const gum = edge < 0.05 ? 1 : 0;
+          r = gum ? 46 * lit : 5; g = gum ? 10 * lit : 3; b = gum ? 10 * lit : 3;
+          // throat: utterly black at the back
+        }
+        // teeth: crooked needles hanging from the top line, jutting up from the bottom
+        const tooth = (row, top) => {
+          for (const t of row) {
+            const tu = -0.86 + t.t * 1.72, tv = top ? mouthTop(tu) : mouthBot(tu), L2 = t.L * (1 - 0.45 * Math.abs(tu)), dir = top ? 1 : -1;
+            const along = (v - tv) * dir; if (along < -0.01 || along > L2) continue;
+            const cxu = tu + t.tilt * along * dir * 0.6, half = t.w * (1 - along / L2);
+            const du = u - cxu; if (Math.abs(du) > half) continue;
+            const k = 0.62 + 0.38 * (1 - along / L2) * lit; let tr = 214 * k, tg = 202 * k, tb = 168 * k;
+            if (du < -half * 0.3 && du > -half * 0.75 && along < L2 * 0.8) { tr = 250; tg = 245; tb = 228; } // wet glint
+            if (along < 0.012) { tr *= 0.6; tg *= 0.5; tb *= 0.45; }
+            return [tr, tg, tb];
+          }
+          return null;
+        };
+        const T = tooth(FACE.up, true) || tooth(FACE.lo, false);
+        if (T) { r = T[0]; g = T[1]; b = T[2]; }
+        // a strand of drool between the jaws
+        if (Math.abs(u - 0.27 - Math.sin(v * 9) * 0.02) < 0.007 && v > mouthTop(0.27) + 0.08 && v < mouthBot(0.27) - 0.06) { r = 150; g = 145; b = 128; }
+      } else {
+        // antler bases running off the top corners
+        for (const sg of [-1, 1]) { const au = u * sg - 0.95, av = v + 0.95; if (au > 0 && Math.abs(av + au * 0.55 - Math.sin(au * 3) * 0.08) < 0.09 - au * 0.02) { const L = 0.25 * clamp(1 - Math.hypot(u, v) * 0.35, 0.1, 1); r = 40 * L; g = 34 * L; b = 26 * L; } }
+      }
+      // quantise like the rest of the game
+      const m = Math.max(r, g, b) / 255;
+      if (m > 0 && m < 0.6) { const q = Math.floor(Math.pow(m, 0.72) * LEV + BAY[bay | (x & 3)]) / LEV, s = q > 0 ? q / Math.pow(m, 0.72) * Math.pow(m, 0.72) / m : 0; r *= s; g *= s; b *= s; }
+      out32[i] = (0xff000000 | (clamp(b, 0, 255) << 16) | (clamp(g, 0, 255) << 8) | clamp(r, 0, 255)) >>> 0;
+    }
+  }
+  // the eyes: white-hot, almond, with a glare that bleeds over the sockets
+  for (const [ex, ey] of eyes) {
+    const exx = cx + ex * Sx, eyy = cy + ey * Sy, rx = 0.17 * Sx, ry = 0.07 * Sy, gl = 0.34 * Sx, rot = ex > 0 ? -0.3 : 0.3;
+    for (let y = Math.floor(eyy - gl); y <= eyy + gl; y++) for (let x = Math.floor(exx - gl); x <= exx + gl; x++) {
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const dx = x - exx, dy = y - eyy, du = dx * Math.cos(rot) + dy * Math.sin(rot), dv = -dx * Math.sin(rot) + dy * Math.cos(rot);
+      const k = du / rx, inEye = Math.abs(k) < 1 && Math.abs(dv) < ry * (1 - k * k) * (dv < 0 ? 0.8 : 1.1); // almond: pointed corners
+      if (inEye) px1(x, y, 255, 255, 248, 1);
+      else { const q = Math.hypot(dx, dy) / gl; if (q < 1) { const a = (1 - q) * (1 - q) * 0.55; if (a > BAY[((y & 3) << 2) | (x & 3)] * 0.5) px1(x, y, 230, 232, 220, a); } }
+    }
+  }
 }
 
 // ---------------- flow ----------------
