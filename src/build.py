@@ -1,6 +1,12 @@
 import os, hashlib
 os.chdir(os.path.dirname(os.path.abspath(__file__)) + '/..')
 head = open('src/head.html').read()
+# (Noah v12) handwriting fonts, one per character who writes things down, embedded so the game works offline (SIL OFL, from Google Fonts)
+import base64, glob
+_ff = ''.join("@font-face{font-family:'%s';src:url(data:font/woff2;base64,%s) format('woff2');font-display:block}" % (
+  {'RockSalt': 'Rock Salt', 'NothingYouCouldDo': 'Nothing You Could Do', 'SquarePeg': 'Square Peg'}[os.path.basename(f)[:-6]], base64.b64encode(open(f, 'rb').read()).decode())
+  for f in sorted(glob.glob('src/fonts/*.woff2')))
+head = head.replace('</style>', _ff + '</style>', 1)
 game = open('src/game.js').read()
 out0 = head + '\n<script>\n' + game + '\n</script>\n'
 out = out0.replace('__BUILD__', hashlib.sha1(out0.encode()).hexdigest()[:7])

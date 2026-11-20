@@ -1276,6 +1276,11 @@ readEl.addEventListener('pointerdown', e => { e.stopPropagation(); closeRead(); 
 // (Noah v11) the close-up is the point: a big picture of the thing in your light, its own writing readable on it.
 // Drawn at 320x180 so a journal page carries real handwriting; the caption comes in after a beat, and stays short.
 const CUW = 320, CUH = 180;
+// (Noah v12) every person who writes something has their own hand, so two people's pages never look the same.
+// px is sized so lowercase letters are about 4.5 px tall on the 11 px ruling.
+const HANDS = { marsh: { fam: 'Rock Salt', px: 9 }, /* free for later writers: */ nycd: { fam: 'Nothing You Could Do', px: 11 }, peg: { fam: 'Square Peg', px: 19 } };
+const handFont = (who, d = 0) => `${HANDS[who].px + d}px "${HANDS[who].fam}"`;
+if (document.fonts) for (const k in HANDS) document.fonts.load(handFont(k)).catch(() => {}); // ready before the first page is picked up
 let handCv = null;
 function drawCloseup(k) {
   const w = CUW, h = CUH, cx = readCv.getContext('2d'), im = cx.createImageData(w, h), d = new Uint32Array(im.data.buffer);
@@ -1299,7 +1304,7 @@ function drawCloseup(k) {
   // handwriting: a real font rendered small, thresholded to ink pixels, every word a little off the line
   const hand = (text, x0, y0, wMax, lh, o = {}) => {
     if (!handCv) handCv = document.createElement('canvas'); handCv.width = w; handCv.height = h;
-    const g = handCv.getContext('2d'); g.clearRect(0, 0, w, h); g.fillStyle = '#000'; g.font = (!o.ink && window.HP_HANDFONT) || o.font || 'italic 600 10px Georgia, "Times New Roman", serif'; // HP_HANDFONT: font trials only g.textBaseline = 'alphabetic';
+    const g = handCv.getContext('2d'); g.clearRect(0, 0, w, h); g.fillStyle = '#000'; g.font = (!o.ink && window.HP_HANDFONT) || o.font || handFont(o.who || 'marsh'); // HP_HANDFONT: font trials only g.textBaseline = 'alphabetic';
     let x = x0, y = y0, ln = 0; const sp = g.measureText(' ').width;
     for (const word of text.split(' ')) {
       const ww = g.measureText(word).width; if (x > x0 && x + ww > x0 + wMax) { x = x0 + (o.indent ? hash2(ln, 5) * 4 : 0); y += lh; ln++; }
@@ -1371,9 +1376,9 @@ function drawCloseup(k) {
     for (let y = 8; y < 168; y++) for (let x = 18; x < 296; x++) { const edge = y < 12 || y > 163 || x < 22 || x > 291; if (edge) px(x, y, 36, 52, 74); }
     for (let y = 12; y < 164; y++) for (let x = 22; x < 292; x++) { const v = 214 - hash2(x * 2, y * 3) * 12 - (Math.abs(x - 157) < 8 ? (8 - Math.abs(x - 157)) * 5 : 0); px(x, y, v, v * 0.93, v * 0.78); onP[y * w + x] = 1; }
     lineP(157, 12, 157, 164, 120, 108, 88); for (let y = 30; y < 162; y += 11) { lineP(28, y, 151, y, 160, 170, 190); lineP(163, y, 286, y, 160, 170, 190); }
-    hand('D. Marsh', 30, 26, 120, 11, { font: 'italic 700 11px Georgia, serif', seed: 1 });
+    hand('D. Marsh', 30, 26, 120, 11, { seed: 1 });
     hand('Thurs. Something keeps pace with me off the trail. It stops when I stop. I put the light on it and it went. It always comes back closer.', 30, 41, 120, 11, { seed: 2 });
-    hand('Fri. Dropped my glasses. Can\'t find the trail. Keep the light on. Keep moving. Find a fire.', 166, 30, 118, 13, { seed: 4, mess: 2, slope: 0.05, font: 'italic 600 11px Georgia, serif', spread: 1.4 }); // rushed: bigger, running downhill
+    hand('Fri. Dropped my glasses. Can\'t find the trail. Keep the light on. Keep moving. Find a fire.', 166, 32, 118, 14, { seed: 4, mess: 3, slope: 0.07, font: handFont('marsh', 2), spread: 1.6 }); // rushed: bigger, sloppier, running downhill
     grime(6, { x0: 22, x1: 292, y0: 12, y1: 164, cx: 90, cy: 100, nx: 0.6, ny: 0.8, tx: 270, ty: 140 });
   } else if (k === 'candy') { // (Noah v12, kept for later) a loud gas-station candy bar: ZAPPO!, starburst, ad copy, torn back to the chocolate
     const word = (t, x, y, font, ink, ol, olInk) => { if (ol) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [1, -1], [-1, 1], [2, 2], [1, 2], [2, 1]]) hand(t, x + dx, y + dy, 300, 20, { font, ink: olInk || [22, 16, 40], mess: 0, th: 90 }); hand(t, x, y, 300, 20, { font, ink, mess: 0, th: 90 }); };
