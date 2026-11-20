@@ -1955,8 +1955,11 @@ function crAnim() {
     r.hp = [r.hp[0] - 0.04, 0.1];
     for (const sd of [1, -1]) {
       // (Noah v12e) chest height, held out in front; small tight circles, unsteady because the body is running under them
-      const th = Math.PI * G + (sd > 0 ? 0 : Math.PI) + 0.4, y = 1.46 - 0.07 * Math.sin(th), z = 1.62 + 0.09 * Math.cos(th), open = 0.5 + 0.5 * Math.cos(th + Math.PI / 4);
-      r[sd > 0 ? 'wR' : 'wL'] = [sd * (0.34 - 0.03 * Math.cos(th)), y, z]; r[sd > 0 ? 'cR' : 'cL'] = 0.45 + 0.8 * open;
+      // (Noah v12f) arms nearly straight, reaching forward from the shoulders; elbows set explicitly, just under the line
+      // from shoulder to claw, so they never fold up over the head. The small circle moves the whole arm, the hand twice as much
+      const th = Math.PI * G + (sd > 0 ? 0 : Math.PI) + 0.4, dy = -0.07 * Math.sin(th), dz = 0.09 * Math.cos(th), open = 0.5 + 0.5 * Math.cos(th + Math.PI / 4);
+      r[sd > 0 ? 'eR' : 'eL'] = [sd * 0.47, 1.43 + dy * 0.5, 1.34 + dz * 0.5];
+      r[sd > 0 ? 'wR' : 'wL'] = [sd * 0.58, 1.4 + dy, 1.98 + dz]; // a little wide, so head-on the claws come at you either side of the body r[sd > 0 ? 'cR' : 'cL'] = 0.45 + 0.8 * open;
     }
     return [r, 2];
   }
