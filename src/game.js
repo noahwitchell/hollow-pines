@@ -1631,14 +1631,13 @@ function crAnim() {
   if (CR.st === 'strike' && S.stk) {
     const k = S.stk;
     if (k.ph !== 1) { CR.anim = 'tower'; const p = copyPose(CPOSE.tower); if ((fc % 96) >= 20 && (fc % 96) < 62) { p.sh = [p.sh[0] + 0.1, p.sh[1]]; p.hd = [p.hd[0], p.hd[1] + 0.1, p.hd[2]]; } return [p, 3]; }
-    const OJ = (p) => window.HP_OPENJAW ? Object.assign(copyPose(p), { jaw: Math.max(p.jaw || 0, 0.24) }) : p; // test: mouth open the whole attack
     const F = Math.floor(k.t * 30); CR.anim = 'reveal';
     if (F <= 0) CR.eyeK = 0.45; // a slit, then the eyes are open
-    if (F < 6) return [OJ(CPOSE.tower), 1];
-    if (F < 8) return [OJ(CPOSE.tower2), 1];
-    if (F < 10) return [OJ(CPOSE.antic), 1];
+    if (F < 6) return [CPOSE.tower, 1];
+    if (F < 8) return [CPOSE.tower2, 1];
+    if (F < 10) return [CPOSE.antic, 1];
     if (F === 10) { CR.smear = true; shake = Math.max(shake, 0.45); }
-    CR.freeze = true; return [OJ(CPOSE.strike), 1];
+    CR.freeze = true; return [CPOSE.strike, 1];
   }
   if (CR.exitF > 0 && CR.pose) { CR.anim = 'exit'; const p = copyPose(CR.pose); p.hp = [p.hp[0] - 0.1, p.hp[1]]; return [p, 1]; }
   const U = CR.dist || 0;
