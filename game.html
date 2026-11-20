@@ -1817,9 +1817,16 @@ function crAnim() {
   }
   if (CR.exitF > 0 && CR.pose) { CR.anim = 'exit'; const p = copyPose(CR.pose); p.hp = [p.hp[0] - 0.1, p.hp[1]]; return [p, 1]; }
   const U = CR.dist || 0;
-  if (CR.st === 'lunge') { // legs running, upper body locked in the wind-up: arms spread, jaw cracked
-    CR.anim = 'lunge'; const r = runPose(U / 1.6, 0), a = CPOSE.antic;
-    Object.assign(r, { sh: [1.75, 0.45], shW: 0.38, hd: [0, 1.62, 0.78], tilt: 0, jaw: a.jaw, wR: [0.26, 1.15, 1.15], eR: [0.62, 1.5, 0.55], wL: [-0.26, 1.15, 1.15], eL: [-0.62, 1.5, 0.55], cR: 1.25, cL: 1.25, ehR: 1, ehL: 1, hp: [r.hp[0] + 0.1, 0] }); // claws out in front, reaching for you, head low
+  if (CR.st === 'lunge') {
+    // (Noah v12) hungry, not tiptoeing: the long heavy run (1.9 m strides, low hips), pitched far forward, head out at you,
+    // and the arms pedal like a bicycle, out of phase: reach high and forward with the claws open, rake down, pull back, come over again
+    CR.anim = 'lunge'; const G = U / 1.9, r = runPose2(G, 0);
+    Object.assign(r, { sh: [1.5, 0.78], shW: 0.36, hd: [0, 1.34, 1.08], tilt: 0, jaw: 0.06, ehR: 1, ehL: 1, eR: null, eL: null, uf: 0.08 });
+    r.hp = [r.hp[0] - 0.04, 0.1];
+    for (const sd of [1, -1]) {
+      const th = Math.PI * G + (sd > 0 ? 0 : Math.PI) + 0.4, y = 1.38 - 0.34 * Math.sin(th), z = 1.36 + 0.38 * Math.cos(th), open = 0.5 + 0.5 * Math.cos(th + Math.PI / 4);
+      r[sd > 0 ? 'wR' : 'wL'] = [sd * (0.4 - 0.08 * Math.cos(th)), y, z]; r[sd > 0 ? 'cR' : 'cL'] = 0.25 + 1.0 * open;
+    }
     return [r, 2];
   }
   const holding = CR.st === 'flee' && CR.rk === 'hold';
