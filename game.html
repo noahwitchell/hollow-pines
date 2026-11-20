@@ -1375,6 +1375,8 @@ readEl.addEventListener('pointerdown', e => { e.stopPropagation(); closeRead(); 
 const CUW = 320, CUH = 180;
 // (Noah v12) every person who writes something has their own hand, so two people's pages never look the same.
 // px is sized so lowercase letters are about 4.5 px tall on the 11 px ruling.
+// Approved pool for later writers (Noah, all free Google fonts; embed the woff2 in src/fonts when one is used):
+// Nothing You Could Do 11, Square Peg 19, Architects Daughter 10, Beth Ellen 9, Gaegu 13, Kalam 9, Gloria Hallelujah 10, Indie Flower 12.
 const HANDS = { marsh: { fam: 'Rock Salt', px: 9 }, /* free for later writers: */ nycd: { fam: 'Nothing You Could Do', px: 11 }, peg: { fam: 'Square Peg', px: 19 } };
 const handFont = (who, d = 0) => `${HANDS[who].px + d}px "${HANDS[who].fam}"`;
 if (document.fonts) for (const k in HANDS) document.fonts.load(handFont(k)).catch(() => {}); // ready before the first page is picked up
