@@ -1800,7 +1800,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   const H0 = PAL.hide[0], H1 = PAL.hide[1], shadow = !!o.shadow, trem = o.trem || 0;
   const Qt = j => { const r = Q(j); return [r[0] + trem, r[1]]; };
   const ln = (a, b, w, col, q = Q) => { const A = q(a), B = q(b); line(A[0], A[1], B[0], B[1], col, w); };
-  const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L']; ln(L.Hp, L.K, 1.0, col); ln(L.K, L.A, 0.7, col); ln(L.A, L.T, 0, col); };
+  const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L']; ln(L.Hp, L.K, 1.0, col); ln(L.K, L.A, 0.7, col); ln(L.A, L.T, 0, col); ln(L.T, [L.T[0], L.T[1], L.T[2] + 0.1], 0, col); }; // feet end in a flat pad, hands in claws
   const arm = (s, col) => {
     const L = J[s > 0 ? 'R' : 'L'], q = o.shield === s ? Qt : Q;
     ln(L.Sh, L.E, 1.0, col, q); hand(s, col, q);
@@ -1852,7 +1852,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   const BEAM = [[0.08, 0.1, -0.05], [0.34, 0.22, -0.25], [0.6, 0.3, -0.45]];
   CR.antDbg = [];
   for (const sg of [-1, 1]) {
-    const pts = BEAM.map(b => [sg * b[0], b[1], b[2]]), hc = !shadow && o.profile && sg !== nearSide ? PAL.hide[1] : PAL.horn;
+    const pts = BEAM.map(b => [sg * b[0], b[1], b[2]]), hc = !shadow && o.profile && sg !== nearSide ? PAL.hide[2] : PAL.hide[1]; // a step lighter than the body so the rack shows over dark ground
     const fr = sg !== nearSide;
     for (let i = 0; i < pts.length - 1; i++) { const a = AQ(...pts[i], fr), b = AQ(...pts[i + 1], fr); line(a[0], a[1], b[0], b[1], hc); }
     if (!shadow) CR.antDbg.push(...pts.map(q => AQ(...q, fr)));
@@ -2267,7 +2267,9 @@ function overlays() {
   // eyeshine: big, self-lit when the beam finds them, and it catches the light from much farther than the beam lights the ground
   if (CR.st !== 'away' && CR.eyes && !CR.eyesShut && CR.eyeP) {
     const face = Math.cos(wrapA(Math.atan2(P.y - CR.y, P.x - CR.x) - CR.a));
-    let I = beamAt(CR.x, CR.y, 3.2) * 2.6 * sstep(0.2, 0.7, face) * (CR.eyeK || 1);
+    if (CR.st === 'strike' || CR.st === 'lunge') CR.ign = 3; // the attack never waits on the ignite
+    const want = face > 0.55 ? 3 : 0; if ((CR.fc | 0) !== CR.ignF && (CR.fc | 0) % 2 === 0) { CR.ignF = CR.fc | 0; CR.ign = clamp((CR.ign || 0) + Math.sign(want - (CR.ign || 0)), 0, 3); } // turning to face you, the eyes ignite in steps: dim, mid, full
+    let I = beamAt(CR.x, CR.y, 3.2) * 2.6 * [0, 0.3, 0.6, 1][CR.ign || 0] * (CR.eyeK || 1);
     const red = mode === 'dying'; if (red) I = 1;
     if (red) for (const [ex, ey] of CR.eyeP) { // huge and white, in your face
       const r = Math.max(2, CR.eyeS * 0.034), g = r * 2.2;
@@ -2306,7 +2308,13 @@ function overlays() {
         if (lit > 0.03 && (ldx || ldy) && !CRM[(y + ldy) * W + x + ldx] && thick(x, y, ldx, ldy)) cand.set(i2, [x, y, 0, clamp(lit * 1.2, 0, 0.55)]);
         else if ((rx2 || ry2) && !CRM[(y + ry2) * W + x + rx2] && thick(x, y, rx2, ry2)) cand.set(i2, [x, y, 1, 0.35]);
       }
-      for (const [i2, c] of cand) { const [x, y] = c; if (cand.has(i2 - 1) || cand.has(i2 + 1) || cand.has(i2 - W) || cand.has(i2 + W)) CR.rim.push([x - bx, y - by, c[2], c[3]]); } // drop singles
+      const ax = -ry2, ay = rx2, sky = [...cand.values()].filter(c => c[2] === 1).map(c => c[0] * ax + c[1] * ay); // position across the top edge
+      const lo = Math.min(...sky), hi = Math.max(...sky), span = hi - lo, lside = Math.sign((qx - sx) * ax + (qy - sy) * ay) || 1, mid = (lo + hi) / 2 + lside * span * 0.2;
+      for (const [i2, c] of cand) {
+        const [x, y] = c; if (!(cand.has(i2 - 1) || cand.has(i2 + 1) || cand.has(i2 - W) || cand.has(i2 + W))) continue; // drop singles
+        if (c[2] === 1 && Math.abs(x * ax + y * ay - mid) > span * 0.2) continue; // the sky rim covers only 40% of the top, toward the light
+        CR.rim.push([x - bx, y - by, c[2], c[3]]);
+      }
     }
     for (const [ox, oy, k, a] of CR.rim) { const x = bx + ox, y = by + oy; if (x < 0 || y < 0 || x >= W || y >= H) continue; if (k === 0) px1(x, y, 170, 125, 80, a); else { const c = out32[y * W + x], lum = (c & 255) + (c >> 8 & 255); if (lum > 14) px1(x, y, 92, 96, 104, a); } }
   }
