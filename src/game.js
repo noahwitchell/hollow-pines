@@ -1947,8 +1947,8 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   const Qt = j => { const r = Q(j); return [r[0] + trem, r[1]]; };
   const ln = (a, b, w, col, q = Q) => { const A = q(a), B = q(b); line(A[0], A[1], B[0], B[1], col, w); };
   const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L'], ka = Q(L.K), aa = Q(L.A), hq = Q(L.Hp), vert = Math.abs(aa[0] - ka[0]) < Math.abs(aa[1] - ka[1]) * 0.36, tv = Math.abs(ka[0] - hq[0]) < Math.abs(ka[1] - hq[1]) * 0.36;
-    if (tv) { line(hq[0], hq[1], ka[0], ka[1], col, 0); line(hq[0] + 1, hq[1], ka[0] + 1, ka[1], col, 0); } else ln(L.Hp, L.K, 1.0, col); // a near-vertical thigh is a fixed 2 px column, not stamped discs
-    ln(L.K, L.A, vert ? 0 : 0.7, col); /* (Noah v12) a near-vertical shin at r 0.7 alternates 1 and 2 px: a ladder */ ln(L.A, L.T, 0, col); ln(L.T, [L.T[0], L.T[1], L.T[2] + 0.1], 0, col); }; // feet end in a flat pad, hands in claws
+    if (tv) { for (const o of [-1, 0, 1]) line(hq[0] + o, hq[1], ka[0] + (o > 0 ? 1 : o < 0 ? 0 : 0), ka[1], col, 0); line(ka[0] + 1, ka[1], ka[0] + 1, ka[1], col, 0); } // head-on the thigh is 3 px at the hip, tapering to 2 at the knee else ln(L.Hp, L.K, 1.0, col); // a near-vertical thigh is a fixed 2 px column, not stamped discs
+    if (vert) { line(ka[0], ka[1], aa[0], aa[1], col, 0); line(ka[0] + 1, ka[1], aa[0] + 1, aa[1], col, 0); } else ln(L.K, L.A, 0.7, col); /* (Noah v12) head-on the shin is a steady 2 px column too, not a 1 px stick */ /* (Noah v12) a near-vertical shin at r 0.7 alternates 1 and 2 px: a ladder */ ln(L.A, L.T, 0, col); ln(L.T, [L.T[0], L.T[1], L.T[2] + 0.1], 0, col); }; // feet end in a flat pad, hands in claws
   const arm = (s, col) => {
     const L = J[s > 0 ? 'R' : 'L'], q = o.shield === s ? Qt : Q;
     ln(L.Sh, L.E, 1.0, col, q); hand(s, col, q);
@@ -1965,8 +1965,8 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   { const ux0 = J.p.ux, tp = [];
     for (const [s, L] of [[1, R_], [-1, L_]]) {
       const at = t => lv3(L.Hp, L.Sh, t);
-      tp.push([s * 0.12 + ux0 * 0.3, L.Hp[1] - 0.04, L.Hp[2]]);
-      const b = at(0.35); tp.push([ux0 + s * 0.22, b[1], b[2] + 0.1], [ux0 + s * 0.22, b[1], b[2] - 0.06]);
+      tp.push([s * 0.17 + ux0 * 0.3, L.Hp[1] - 0.04, L.Hp[2]]); // (Noah v12) hips wide enough that head-on the legs hang from a body, not a stick
+      const b = at(0.35); tp.push([ux0 + s * 0.26, b[1], b[2] + 0.1], [ux0 + s * 0.26, b[1], b[2] - 0.06]);
       const c = at(0.7); tp.push([ux0 + s * 0.28, c[1], c[2] + 0.22], [ux0 + s * 0.28, c[1], c[2] - 0.12]);
       const hb = at(0.95); tp.push([ux0 + s * 0.2, hb[1], hb[2] - 0.15]);
       tp.push(L.Sh, [ux0 + s * 0.16, L.Sh[1] + 0.12, L.Sh[2]]);
@@ -2437,6 +2437,13 @@ function overlays() {
       for (const [i2, c] of cand) {
         const [x, y] = c; if (!(cand.has(i2 - 1) || cand.has(i2 + 1) || cand.has(i2 - W) || cand.has(i2 + W))) continue; // drop singles
         if (c[2] === 1 && Math.abs(x * ax + y * ay - mid) > span * 0.2) continue; // the sky rim covers only 40% of the top, toward the light
+        if (c[2] === 0) { // (Noah v12) the light rim only along a real edge: a run of 3+ pixels across the light. On the stair-stepped
+          // sides of the torso seen head-on, every step caught a 1-2 px dash of light, and the dashes stacked into a ribcage
+          const step = ldy ? 1 : W; let n = 1; // walk along the edge, across the light
+          for (let k2 = 1; k2 < 3 && cand.has(i2 + k2 * step) && cand.get(i2 + k2 * step)[2] === 0; k2++) n++;
+          for (let k2 = 1; k2 < 3 && cand.has(i2 - k2 * step) && cand.get(i2 - k2 * step)[2] === 0; k2++) n++;
+          if (n < 3) continue;
+        }
         CR.rim.push([x - bx, y - by, c[2], c[3]]);
       }
     }
