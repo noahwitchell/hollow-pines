@@ -779,6 +779,7 @@ function newTolerance(shadowing) {
   return shadowing ? 3 + t * 1.5 : t;
 }
 function react(kind) {
+  if (CR.anim === 'flinch') CR.exitF = 3; // a 3-frame gather before it goes
   CR.lastR = kind; CR.rk = kind; CR.press = 0;
   const d = crDist();
   if (kind === 'shadow') { CR.sd = clamp(d, 6, 13); CR.tol = newTolerance(true); setCr('shadow'); snd.rustle(CR.x, CR.y, 0.3); return; }
@@ -1464,15 +1465,15 @@ const CPOSE = {
 }
 // (notes v5) LEAN: the menacing idle. Torso pitched toward you and hunched, head low, looking up from under the brow,
 // both hands out in front with the claws curled.
-CPOSE.lean = { hp: [1.12, -0.05], hpT: 0, sh: [1.84, 0.32], shT: 0, shW: 0.36, hd: [0, 1.86, 0.55], tilt: 0, jaw: 0, ux: 0, et: 0,
+CPOSE.lean = { hp: [1.12, -0.05], hpT: 0, sh: [1.9, 0.32], shT: 0, shW: 0.36, hd: [0, 1.82, 0.55], tilt: 0, jaw: 0, ux: 0, et: 0,
   wR: [0.42, 0.95, 0.7], eR: [0.5, 1.32, 0.42], wL: [-0.44, 0.88, 0.48], eL: [-0.48, 1.3, 0.3], cR: 0.3, cL: 0.3, ehR: 0, ehL: 0, aR: [0.08, 0.12, 0.02], aL: [-0.08, 0.12, 0.02], sc: 1 };
 // every pose carries: upper-body forward offset, wrist break (degrees) and per-hand wrist mode, optional shoulder overrides
-const PDEF = { uf: 0, wb: 25, wmR: 0, wmL: 0, sR: null, sL: null, shield: 0, et: 0, eR: null, eL: null };
+const PDEF = { roR: false, roL: false, uf: 0, wb: 25, wmR: 0, wmL: 0, sR: null, sL: null, shield: 0, et: 0, eR: null, eL: null };
 for (const k in CPOSE) CPOSE[k] = Object.assign({}, PDEF, CPOSE[k]);
 const lv3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 function lerpPose(a, b, t) { const o = {}; for (const k in a) o[k] = a[k] == null || b[k] == null ? (t < 0.5 ? a[k] : b[k]) : Array.isArray(a[k]) ? a[k].map((v, i) => v + (b[k][i] - v) * t) : a[k] + (b[k] - a[k]) * t; return o; }
 function copyPose(a) { const o = {}; for (const k in a) o[k] = Array.isArray(a[k]) ? a[k].slice() : a[k]; return o; }
-function mirPose(p) { const n = v => v && [-v[0], v[1], v[2]]; return Object.assign(copyPose(p), { hpT: -p.hpT, shT: -p.shT, hd: n(p.hd), tilt: -p.tilt, et: -p.et, ux: -p.ux, wR: n(p.wL), wL: n(p.wR), eR: n(p.eL), eL: n(p.eR), sR: n(p.sL), sL: n(p.sR), wmR: p.wmL, wmL: p.wmR, cR: p.cL, cL: p.cR, ehR: p.ehL, ehL: p.ehR, aR: n(p.aL), aL: n(p.aR), shield: -(p.shield || 0) }); }
+function mirPose(p) { const n = v => v && [-v[0], v[1], v[2]]; return Object.assign(copyPose(p), { hpT: -p.hpT, shT: -p.shT, hd: n(p.hd), tilt: -p.tilt, et: -p.et, ux: -p.ux, wR: n(p.wL), wL: n(p.wR), eR: n(p.eL), eL: n(p.eR), sR: n(p.sL), sL: n(p.sR), wmR: p.wmL, wmL: p.wmR, cR: p.cL, cL: p.cR, ehR: p.ehL, ehL: p.ehR, aR: n(p.aL), aL: n(p.aR), roR: p.roL, roL: p.roR, shield: -(p.shield || 0) }); }
 // keyed tracks: [[frame, value], ...] eased with smoothstep between keys
 function track(keys, fr) {
   if (fr <= keys[0][0]) return keys[0][1];
@@ -1508,7 +1509,8 @@ function stalkPose(U, back) {
   const UR = ((U % 2) + 2) % 2, UL = ((U + 1) % 2 + 2) % 2;
   p.aR = gaitFoot(UR, 1.0, 1.0, 0.12, 1); p.aL = gaitFoot(UL, 1.0, 1.0, 0.12, -1);
   const sw = Math.cos(Math.PI * (U - 0.2)) * 0.2; // arms swing forward and back only, 4 frames behind the legs
-  p.wR = [0.46, 0.38 - 0.08 * Math.max(0, sw / 0.2) ** 3, 0.52 - sw]; p.wL = [-0.46, 0.38 - 0.08 * Math.max(0, -sw / 0.2) ** 3, 0.52 + sw];
+  const sw2 = Math.cos(Math.PI * (U - 0.5)) * 0.2; // the other arm 6 frames further behind, and held differently, so the arms never run parallel
+  p.wR = [0.42, 0.7 - 0.06 * Math.max(0, sw / 0.2) ** 3, 0.6 - sw]; p.wL = [-0.38, 0.95, 0.35 + sw2];
   if (back) { p.hd = [p.hd[0], p.hd[1] + 0.08, p.hd[2] - 0.15]; }
   return p;
 }
@@ -1542,10 +1544,10 @@ function runPose2(U, ls) {
   p.aR = runFoot(UR, 1); p.aL = runFoot(UL, -1);
   const cs = ls ? -ls : -1, f2 = UR * 12; // the crutch arm, and where we are in its two-step cycle
   let W, wm;
-  if (f2 < 6) { W = [cs * 0.38, 0.2, 1.1 - f2 * 1.9 / 12]; wm = 2; p.shT = -cs * 0.1; } // planted: pinned to the ground as the body passes
+  if (f2 < 6) { W = [cs * 0.38, 0.2, 0.95 - f2 * 1.9 / 12]; wm = 2; p.shT = -cs * 0.1; } // planted: pinned to the ground as the body passes
   else if (f2 < 10) { W = lv3([cs * 0.38, 0.25, 0.15], [cs * 0.4, 0.7, 0.2], sstep(6, 10, f2)); wm = 0; } // released, claws trailing
   else if (f2 < 20) { W = [cs * 0.4, 0.7, 0.2]; wm = 0; }
-  else { W = lv3([cs * 0.4, 0.7, 0.2], [cs * 0.38, 0.55, 1.15], sstep(20, 24, f2)); wm = 1; } // swinging out to plant
+  else { W = lv3([cs * 0.4, 0.7, 0.2], [cs * 0.38, 0.5, 0.95], sstep(20, 24, f2)); wm = 1; } // swinging out to plant
   if (cs > 0) { p.wR = W; p.eR = null; p.wmR = wm; p.cR = 1; } else { p.wL = W; p.eL = null; p.wmL = wm; p.cL = 1; }
   const os = -cs;
   if (ls) { const E = [os * 0.32, 1.7, 0.5], Wr = [os * 0.1, 1.66, 0.72]; if (os > 0) { p.eR = E; p.wR = Wr; p.wmR = 3; } else { p.eL = E; p.wL = Wr; p.wmL = 3; } p.wb = 35; } // shielding, bent
@@ -1557,7 +1559,7 @@ function runPose2(U, ls) {
 // a laboured breath), at most three, then just breathing. Never a tremble.
 function flinchPose(ls, F) {
   const p = copyPose(CPOSE.lean);
-  Object.assign(p, { hp: [1.04, -0.05], ux: -0.12, uf: -0.15, hd: [-0.1, 1.8, 0.55], tilt: -12, sR: [0.36, 1.95, 0.05], eR: [0.52, 1.92, 0.3], wR: [0.12, 2.0, 0.3], wmR: 3, wb: 35, cR: 0.5,
+  Object.assign(p, { hp: [1.04, -0.05], ux: -0.12, uf: -0.15, hd: [-0.1, 1.8, 0.55], tilt: -12, sR: [0.36, 1.95, 0.05], eR: [0.62, 2.18, 0.28], wR: [0.02, 1.95, 0.42], wmR: 3, wb: 35, cR: 0.5,
     eL: [-0.42, 1.35, -0.1], wL: [-0.4, 0.85, -0.2], wmL: 0, cL: 1.2, shield: 1 });
   p.aL = [-0.08, 0.12, -0.25 * sstep(3, 5, F)]; // the far foot steps back
   if (F >= 4 && F < 6) p.ux -= 0.08; // overshoots a pixel further away, then settles
@@ -1587,10 +1589,12 @@ function leanIdle(fc) {
   if (!CR.ic || fc - CR.ic.t0 >= CR.ic.len) { const k = 0.75 + R() * 0.55; CR.ic = { t0: fc, k, len: 120 * k, side: R() < 0.5 ? 1 : -1, lean: R() < 0.34 }; }
   const ic = CR.ic, t = (fc - ic.t0) / ic.k, p = copyPose(CPOSE.lean);
   const rA = track(REACH_A, t), rB = track(REACH_B, t);
-  p.eR = lv3([0.5, 1.32, 0.42], [0.6, 1.36, 0.7], rA); p.wR = lv3([0.42, 0.95, 0.7], [0.48, 1.02, 1.28], rA); // reach low and long: from above, forward and up cancel out on screen p.cR = track(CLAW_A, t); p.wmR = rA > 0.5 ? 1 : 0;
-  p.eL = lv3([-0.48, 1.3, 0.3], [-0.62, 1.3, 0.62], rB); p.wL = lv3([-0.44, 0.88, 0.48], [-0.5, 0.95, 1.15], rB); p.cL = track(CLAW_B, t); p.wmL = rB > 0.5 ? 1 : 0;
+  // a reach arcs out to the side first, then curls in toward you: from above it reads by sideways travel and overlap, not depth
+  const reachW = (r, s, rest) => r < 0.45 ? lv3(rest, [s * 0.8, 1.2, 0.4], sstep(0, 0.45, r)) : lv3([s * 0.8, 1.2, 0.4], [s * 0.45, 1.1, 1.1], sstep(0.45, 1, r));
+  p.eR = null; p.wR = reachW(rA, 1, [0.42, 0.95, 0.7]); p.cR = track(CLAW_A, t) * (rA > 0.5 ? 1.15 : 1); p.wmR = rA > 0.5 ? 1 : 0; p.roR = rA > 0.8;
+  p.eL = null; p.wL = reachW(rB, -1, [-0.44, 0.88, 0.48]); p.cL = track(CLAW_B, t) * (rB > 0.5 ? 1.15 : 1); p.wmL = rB > 0.5 ? 1 : 0; p.roL = rB > 0.8;
   const s6 = Math.max(track(REACH_A, t - 6), track(REACH_B, t - 6)), h4 = track(REACH_A, t - 4) - track(REACH_B, t - 4);
-  p.sh = [p.sh[0], p.sh[1] + 0.1 * s6]; p.hd = [p.hd[0] + 0.1 * h4, p.hd[1], p.hd[2] + 0.06 * s6]; // shoulders follow the hand, the head turns toward it, both a little late
+  p.sh = [p.sh[0], p.sh[1] + 0.1 * s6]; p.hd = [p.hd[0] + 0.1 * h4, p.hd[1] - 0.15 * s6, p.hd[2] + 0.06 * s6]; // head drops as it leans into the reach // shoulders follow the hand, the head turns toward it, both a little late
   if (ic.lean && t < 30) p.uf = 0.08; // leans in
   return ic.side > 0 ? p : mirPose(p);
 }
@@ -1612,6 +1616,7 @@ function crAnim() {
     if (F === 10) { CR.smear = true; shake = Math.max(shake, 0.45); }
     CR.freeze = true; return [CPOSE.strike, 1];
   }
+  if (CR.exitF > 0 && CR.pose) { CR.anim = 'exit'; const p = copyPose(CR.pose); p.hp = [p.hp[0] - 0.1, p.hp[1]]; return [p, 1]; }
   const U = CR.dist || 0;
   if (CR.st === 'lunge') { // legs running, upper body locked in the wind-up: arms spread, jaw cracked
     CR.anim = 'lunge'; const r = runPose(U / 1.6, 0), a = CPOSE.antic;
@@ -1659,7 +1664,7 @@ function crAnim() {
   return [p, 3];
 }
 // body-space joints for a pose
-const ELB_MAX = Math.sqrt(0.36 + 0.49 + 2 * 0.42 * Math.cos(25 * Math.PI / 180)); // the elbow never straightens past ~155 degrees
+const ELB_MAX = 1.14; // pull the hand in so the elbow always shows a bend
 const WRIST_HINT = [s => [-s * 0.4, 0, 1], () => [0, -1, 0.6], () => [0, 0, 1], s => [-s, -0.3, 0.3]]; // curled in / reaching down / planted, bent back / over the face
 function crJoints(p) {
   const up = v => [v[0] + p.ux, v[1], v[2] + (p.uf || 0)];
@@ -1700,7 +1705,11 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L']; ln(L.Hp, L.K, 1.0, col); ln(L.K, L.A, 0.7, col); ln(L.A, L.T, 0, col); };
   const arm = (s, col) => {
     const L = J[s > 0 ? 'R' : 'L'], q = o.shield === s ? Qt : Q;
-    ln(L.Sh, L.E, 1.0, col, q); ln(L.E, L.W, 0, col, q);
+    ln(L.Sh, L.E, 1.0, col, q); hand(s, col, q);
+  };
+  const hand = (s, col, q = Q) => { // forearm (2 px when it's near vertical, so it doesn't stair-step into a ladder) and claws
+    const L = J[s > 0 ? 'R' : 'L'], a = q(L.E), b = q(L.W), vert = Math.abs(b[0] - a[0]) < Math.abs(b[1] - a[1]) * 0.36;
+    ln(L.E, L.W, vert ? 0.7 : 0, col, q);
     for (const [m, t] of L.claws) { ln(L.W, m, 0, col, q); ln(m, t, 0, PAL.claw, q); }
   };
   const far = -nearSide;
@@ -1732,16 +1741,19 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   if (!shadow) {
     if (jd > 0.03) { fillPoly([HQ(-0.13, -0.05, 0.31), HQ(0.13, -0.05, 0.31), HQ(0.1, -0.05 - jd, 0.31), HQ(-0.1, -0.05 - jd, 0.31)], PAL.mouth); const a = HQ(-0.11, -0.05, 0.32), b = HQ(0.11, -0.05, 0.32); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
     else {
-      const a = HQ(-0.07, -0.09, 0.3), b = HQ(0.07, -0.09, 0.3); line(a[0], a[1], b[0], b[1], PAL.tooth[0]);
-      if (o.profile) { const c = HQ(nearSide * 0.15, -0.09, 0.14), d = HQ(nearSide * 0.15, -0.09, 0.3); line(c[0], c[1], d[0], d[1], PAL.tooth[0]); } // side-on, the tooth row runs along the jaw
+      if (!o.profile) { const a = HQ(-0.07, -0.09, 0.3), b = HQ(0.07, -0.09, 0.3); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
+      else { const c = HQ(nearSide * 0.15, -0.14, 0.12), d = HQ(nearSide * 0.15, -0.14, 0.29), fg = HQ(nearSide * 0.15, -0.17, 0.28); line(c[0], c[1], d[0], d[1], PAL.tooth[0]); if (fg[0] >= 0 && fg[1] >= 0 && fg[0] < W && fg[1] < H) put((fg[1] | 0) * W + (fg[0] | 0), PAL.tooth[0]); }
+      if (false) { const c = HQ(nearSide * 0.15, -0.09, 0.14), d = HQ(nearSide * 0.15, -0.09, 0.3); line(c[0], c[1], d[0], d[1], PAL.tooth[0]); } // side-on, the tooth row runs along the jaw
     }
   }
+  if (!shadow) for (const s of [1, -1]) if (J.p[s > 0 ? 'roR' : 'roL']) hand(s, H0); // at full reach the hand comes over the body
   // antlers: they ride on a spring behind the head, so they arrive late and overshoot
   const at = ant.t * Math.PI / 180, ca = Math.cos(at), sa = Math.sin(at);
   const AQ = (x, h) => Q([ant.p[0] + x * ca + h * sa, ant.p[1] - x * sa + h * ca, ant.p[2] - Math.abs(x) * ant.sw]);
   for (const sg of [-1, 1]) {
     const bx = sg * 0.075, by = 0.13, A = q => [bx + sg * q[0] * ka, by + q[1] * ka];
-    for (let i = 0; i < ANTLER.beam.length - 1; i++) { const a = AQ(...A(ANTLER.beam[i])), b = AQ(...A(ANTLER.beam[i + 1])); line(a[0], a[1], b[0], b[1], PAL.horn); }
+    const hc = !shadow && o.profile && sg !== nearSide ? PAL.hide[1] : PAL.horn;
+    for (let i = 0; i < ANTLER.beam.length - 1; i++) { const a = AQ(...A(ANTLER.beam[i])), b = AQ(...A(ANTLER.beam[i + 1])); line(a[0], a[1], b[0], b[1], hc); }
     if (shadow) continue;
     for (const [f, deg, len] of ANTLER.tines) {
       const k = f * (ANTLER.beam.length - 1), i0 = Math.min(ANTLER.beam.length - 2, k | 0), t = k - i0, q = ANTLER.beam[i0], q1 = ANTLER.beam[i0 + 1];
@@ -1768,6 +1780,7 @@ function drawCreature(dt = 1 / 30) {
   // a new pose only every 2 or 3 frames; the body still moves through the world every frame
   const prevAnim = CR.anim, [target, stepN] = crAnim();
   if (CR.stopF > 0) { CR.stopF -= dt * 30; CR.gk = 0; }
+  if (CR.exitF > 0) { CR.exitF -= dt * 30; CR.gk = 0; }
   const q = Math.floor(CR.fc / stepN);
   if (!CR.pose || q !== CR.pq || CR.anim !== prevAnim || dying) {
     if (CR.anim !== prevAnim && CR.pose && !['reveal', 'tower', 'dying'].includes(CR.anim)) { CR.from = CR.pose; CR.bT = 0; }
@@ -1775,12 +1788,12 @@ function drawCreature(dt = 1 / 30) {
     if (CR.from) { CR.bT += stepN; const t = sstep(0, 4, CR.bT); p = lerpPose(CR.from, target, t); if (t >= 1) CR.from = null; }
     CR.pose = p; CR.pq = q;
     // antler spring: lag 2-3 frames behind the head, overshoot a pixel when it stops hard
-    const tgt = CR.pose.hd, tt = CR.pose.tilt, sw = CR.anim === 'run' || CR.anim === 'lunge' ? 0.25 : 0;
+    const tgt = CR.pose.hd, tt = CR.pose.tilt, sw = CR.anim === 'run' || CR.anim === 'lunge' || CR.anim === 'flinch' ? 0.3 : 0;
     if (!CR.ant || CR.freeze) CR.ant = { p: tgt.slice(), v: [0, 0, 0], t: tt, tv: 0, sw }; // nothing moves after the strike lands
     else { const A = CR.ant; for (let i = 0; i < 3; i++) { A.v[i] = (A.v[i] + (tgt[i] - A.p[i]) * 0.55) * 0.5; A.p[i] += A.v[i] * (stepN > 1 ? 1.4 : 1); } A.tv = (A.tv + (tt - A.t) * 0.55) * 0.5; A.t += A.tv; A.sw += (sw - A.sw) * 0.5; }
   }
   const J = crJoints(CR.pose), ant = { p: [CR.ant.p[0] + CR.pose.ux, CR.ant.p[1], CR.ant.p[2]], t: CR.ant.t * 1.5, sw: CR.ant.sw };
-  { const [qx, qy] = s2(CR.x, CR.y), [lx, ly] = leanV(qx, qy, 1), ll = Math.hypot(lx, ly) || 1, fc = Math.abs((Math.cos(CR.a) * lx + Math.sin(CR.a) * ly) / ll); if (mode !== 'dying') ant.sw = Math.max(ant.sw, 0.6 * sstep(0.3, 0.8, 1 - fc)); } // side-on, the antlers sweep back so they don't collapse into a stick
+  { const [qx, qy] = s2(CR.x, CR.y), [lx, ly] = leanV(qx, qy, 1), ll = Math.hypot(lx, ly) || 1, fc = Math.abs((Math.cos(CR.a) * lx + Math.sin(CR.a) * ly) / ll); if (mode !== 'dying') ant.sw = Math.max(ant.sw, 0.85 * sstep(0.3, 0.8, 1 - fc)); } // side-on, the antlers sweep back so they don't collapse into a stick
   let [sx, sy] = s2(CR.x, CR.y), G, SH, fx, fy, rx, ry, ux, uy;
   const sc = CR.pose.sc || 1;
   if (dying) { // it slams in until its eyes and teeth fill the screen
@@ -1806,6 +1819,7 @@ function drawCreature(dt = 1 / 30) {
       MASK = SHB; MV = 0.6; crDraw(Qs, Qsr, J, ant, ka, nearSide, { shadow: true }); MASK = null;
       const Lm = 2.6 * k, x0 = Math.max(0, Math.floor(sx - Lm - 8)), x1 = Math.min(W - 1, Math.ceil(sx + Lm + 8)), y0 = Math.max(0, Math.floor(sy - Lm - 8)), y1 = Math.min(H - 1, Math.ceil(sy + Lm + 8));
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * W + x; if (SHB[i] < 1 && ((x + y) & 1) && ((x + 0.5 - sx) * bx + (y + 0.5 - sy) * by) / Lm > 0.6) SHB[i] = 1; } // checker-dither the far end
+      for (let y = Math.floor(sy) - 1; y <= sy + 1; y++) for (let x = Math.floor(sx) - 2; x <= sx + 2; x++) if (x >= 0 && y >= 0 && x < W && y < H) SHB[y * W + x] = 1; // a pixel of ground between feet and shadow
     }
     // contact shadow: always, under its feet, with a darker core
     MASK = SHA;
@@ -1821,12 +1835,14 @@ function drawCreature(dt = 1 / 30) {
   OV = null;
   // eyes: locked to the head. A head tilt drops one eye a pixel; in profile only the near eye shows clearly; the shield hand covers one
   const es = Math.max(0.054, 1.7 / G), et = CR.pose.et || 0, fl = Math.hypot(fx, fy) || 1, faceCam = -(fx * ux + fy * uy) / fl;
-  const eyes = [];
+  const eyes = [], off = Math.acos(clamp(Math.abs(faceCam), 0, 1)) * 180 / Math.PI;
+  const eA = HQ(-es, 0.06, 0.18), eB = HQ(es, 0.06, 0.18), my = Math.floor((eA[1] + eB[1]) / 2) + 0.5, mx = (eA[0] + eB[0]) / 2, dir = Math.sign(eB[0] - eA[0]) || 1;
+  const gap = off < 30 ? 1.5 : 1, pos = { [-1]: [Math.floor(mx - dir * gap) + 0.5, my], [1]: [Math.floor(mx + dir * gap) + 0.5, my] };
   for (const sg of [-1, 1]) {
     if (CR.pose.shield === sg) continue;
-    if (Math.abs(faceCam) < 0.64 && sg !== nearSide) continue; const k = 1; // side-on: just the near eye
-    const e = HQ(sg * es, 0.06, 0.18); if (et === sg) { e[0] -= Math.round(ux); e[1] -= Math.round(uy); }
-    eyes.push([e[0], e[1], k]);
+    if (off > 55 && sg !== nearSide) continue;
+    const e = off > 55 ? HQ(sg * es, 0.06, 0.18) : pos[sg].slice(); if (et === sg) { e[0] -= Math.round(ux); e[1] -= Math.round(uy); }
+    eyes.push([e[0], e[1], off >= 30 && sg !== nearSide ? 0.5 : 1]);
   }
   CR.eyeP = eyes; CR.eyeS = G;
 }
@@ -2043,12 +2059,12 @@ function render(dt) {
   drawDeer();
   drawCritters();
   const dying = mode === 'dying';
-  if (!dying) drawCreature(dt);
+  if (!dying) { for (const o of vis) if (o.bush && CR.st !== 'away' && o.y < CR.y - 0.3) { drawBush(o); o._pre = true; } drawCreature(dt); } // bushes behind it go under it
   if (mode !== 'title' && !dying) drawPlayer();
   const tv = []; near(solidG, camX, camY, Math.max(hwM, hhM) + 4, o => { if (o.t === 'tree') tv.push(o); });
   tv.sort((a, b) => ((a.x - camX) ** 2 + (a.y - camY) ** 2) - ((b.x - camX) ** 2 + (b.y - camY) ** 2));
   for (const o of tv) drawTree(o);
-  for (const o of vis) if (o.bush) drawBush(o);
+  for (const o of vis) if (o.bush) { if (o._pre) { o._pre = false; continue; } drawBush(o); }
   if (dying) drawCreature(dt); // nothing between you and it
   for (const rf of reflectors) { const [sx, sy] = s2(rf.x, rf.y); if (sx >= 0 && sy >= 0 && sx < W && sy < H) ob[(sy | 0) * W + (sx | 0)] = PAL.refl; }
   for (const f of fires) fireTick(f, dt);
@@ -2153,6 +2169,7 @@ function overlays() {
     else if (I > 0.04) for (const [ex, ey, ek = 1] of CR.eyeP) {
       const c = red ? [255, 255, 250] : [255, 250, 230], h = red ? [210, 210, 200] : [160, 150, 118], v = clamp(I, 0, 1) * ek, big = red ? 3 : 1;
       if (red) for (let oy = -big; oy <= big; oy++) for (let ox = -big; ox <= big; ox++) { if (ox || oy) px1(ex + ox, ey + oy, h[0], h[1], h[2], v * 0.4); }
+      if (!red && (CR.eyeK || 1) < 0.6) { px1(ex, ey, c[0], c[1], c[2], v * 1.6); px1(ex + 1, ey, c[0], c[1], c[2], v * 1.2); continue; } // a narrowed slit
       px1(ex, ey, c[0], c[1], c[2], v); if (red) for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) px1(ex + ox, ey + oy, c[0], c[1], c[2], 1);
     }
   }
