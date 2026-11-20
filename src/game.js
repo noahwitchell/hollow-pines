@@ -930,6 +930,7 @@ function startStrike(where) {
 }
 function strikeTick(dt) {
   const k = S.stk; k.t += dt;
+  if (k.ph === 0 || k.ph === 1) CR.a = Math.atan2(P.y - CR.y, P.x - CR.x); // (Noah v12) its eyes never leave you
   if (k.ph === -1) { // the crickets stop. On the trail, a snap behind you first
     if (k.where === 'trail' && !k.snap && k.t > 0.9) { k.snap = true; const ba = (lightOn ? beam.aim : P.face) + Math.PI; snd.twig(P.x + Math.cos(ba) * 7, P.y + Math.sin(ba) * 7, 1.4); fear = Math.max(fear, 0.6); }
     if (k.t > (k.where === 'trail' ? 2.0 : 0.8)) {
@@ -1663,7 +1664,7 @@ function recoilPose(ls) { // caught in the light: upper body snaps away, light-s
 // down together (the far one a beat late), then come back up with the claws opening. The head, pushed out on the neck,
 // rolls in a slow circle in place, upright, bobbing low as the arms sink. Loop = 84 frames (2.8 s); every part is offset.
 const IDLE_LOOP = 84;
-function leanIdle(fc) {
+function leanIdle(fc, intent) { // intent: (Noah v12) locked on you like a predator on prey: the body breathes, the head never leaves you
   if (CR.ic == null) CR.ic = { ph: R(), sd: R() < 0.5 ? 1 : -1 };
   const TAU = Math.PI * 2, u = fc / IDLE_LOOP + CR.ic.ph, th = u * TAU;
   const sink = (k) => 0.5 - 0.5 * Math.cos(th - k * TAU); // 0 = arms up, 1 = sunk and hunched
@@ -1676,9 +1677,9 @@ function leanIdle(fc) {
   // the body hunches with the arms: shoulders down and forward
   p.sh = [p.sh[0] - 0.14 * dB, p.sh[1] + 0.1 * dB]; p.uf = 0.03 + 0.06 * dB;
   // head: pushed out, circling in place on the neck, low as the body hunches
-  const hx = 0.15 * Math.sin(th * 1 + 0.6), hf = 0.08 * Math.cos(th + 0.6);
-  p.hd = [p.hd[0] + hx, p.hd[1] - 0.12 * sink(0.1) + 0.03, p.hd[2] + 0.06 + hf];
-  p.tilt = 14 * Math.sin(th + 0.3);
+  const hx = intent ? 0 : 0.15 * Math.sin(th * 1 + 0.6), hf = intent ? 0.12 : 0.08 * Math.cos(th + 0.6);
+  p.hd = [p.hd[0] + hx, p.hd[1] - (intent ? 0.05 : 0.12 * sink(0.1) - 0.03), p.hd[2] + 0.06 + hf]; // intent: pushed out low and level, held still while everything under it moves
+  p.tilt = intent ? 0 : 14 * Math.sin(th + 0.3);
   p.jaw = dB > 0.75 ? 0.05 : 0; // jaw cracks at the bottom of the hunch
   return CR.ic.sd > 0 ? p : mirPose(p);
 }
@@ -1707,10 +1708,9 @@ function crAnim() {
   if (CR.st === 'strike' && S.stk) {
     const k = S.stk;
     // (Noah v12) it waits behind you already coiled to attack: the hunched lean, claws out, never still
-    if (k.ph !== 1) { CR.anim = 'tower'; k.lp = null; return [leanIdle(fc), 2]; }
+    if (k.ph !== 1) { CR.anim = 'tower'; k.lp = null; return [leanIdle(fc, true), 2]; }
     const F = Math.floor(k.t * 30); CR.anim = 'reveal';
-    if (!k.lp) { k.lp = leanIdle(fc); k.ls = copyPose(k.lp); k.ls.tilt = k.lp.tilt > 0 ? -22 : 22; k.ls.et = k.ls.tilt > 0 ? 1 : -1; k.ls.hd = [k.lp.hd[0], k.lp.hd[1] + 0.06, k.lp.hd[2]]; } // caught mid-breath; then the head snaps
-    if (F <= 0) CR.eyeK = 0.45; // a slit, then the eyes are open
+    if (!k.lp) { k.lp = leanIdle(fc, true); k.ls = copyPose(k.lp); k.ls.hp = [k.lp.hp[0] - 0.08, k.lp.hp[1]]; k.ls.sh = [k.lp.sh[0] - 0.08, k.lp.sh[1] + 0.04]; k.ls.hd = [k.lp.hd[0], k.lp.hd[1] - 0.06, k.lp.hd[2] + 0.04]; } // caught staring right at you; it sinks a little lower, coiling, then springs up
     if (F < 6) return [k.lp, 1];
     if (F < 8) return [k.ls, 1];
     // (Noah v12) bigger: from the head snap it rears up and spreads (F8-13, fast out, slow in), holds there trembling (F14-19), then lunges in
