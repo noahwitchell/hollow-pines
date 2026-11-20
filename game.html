@@ -1043,7 +1043,7 @@ function strikeTick(dt) {
     else if (k.t > 4.6) strikeHit(); // you never turned around
     return;
   }
-  if (k.ph === 1) { if (k.t > 0.72) strikeHit(); return; } // (Noah v12) 22 frames: still, head snap, rear up arms wide, hold, strike, hold; the light cuts on frame 22
+  if (k.ph === 1) { if (k.t > 0.94) strikeHit(); return; } // (Noah v12c) 28 frames: slow rise, snap to full size, hold, strike, hold; the light cuts on frame 28
   if (k.t > 1.3) { S.stk = null; D.hush = 2.5; setPhase('calm', 36 + R() * 10); D.falseT = -1; }
 }
 function strikeHit() {
@@ -1806,12 +1806,13 @@ function crAnim() {
     if (k.ph !== 1) { CR.anim = 'tower'; k.lp = null; return [leanIdle(fc, true), 2]; }
     const F = Math.floor(k.t * 30); CR.anim = 'reveal';
     if (!k.lp) { k.lp = leanIdle(fc, true); k.ls = copyPose(k.lp); k.ls.hp = [k.lp.hp[0] - 0.08, k.lp.hp[1]]; k.ls.sh = [k.lp.sh[0] - 0.08, k.lp.sh[1] + 0.04]; k.ls.hd = [k.lp.hd[0], k.lp.hd[1] - 0.06, k.lp.hd[2] + 0.04]; } // caught staring right at you; it sinks a little lower, coiling, then springs up
-    if (F < 6) return [k.lp, 1];
-    if (F < 8) return [k.ls, 1];
-    // (Noah v12) bigger: from the head snap it rears up and spreads (F8-13, fast out, slow in), holds there trembling (F14-19), then lunges in
-    if (F < 14) { const u = (F - 7) / 6, e = 1 - (1 - u) ** 3; return [lerpPose(k.ls, CPOSE.spread, e), 1]; }
-    if (F < 20) { const p = copyPose(CPOSE.spread), q = (F & 1) ? 1 : -1, g = (F - 14) / 6; p.wR = [p.wR[0] + 0.03 * q, p.wR[1] + 0.06 * g, p.wR[2]]; p.wL = [p.wL[0] - 0.03 * q, p.wL[1] + 0.06 * g, p.wL[2]]; p.hd = [p.hd[0], p.hd[1] + 0.03 * g, p.hd[2] - 0.04 * g]; p.sc = 1.08 + 0.02 * g; return [p, 1]; }
-    if (F === 20) { CR.smear = true; shake = Math.max(shake, 0.45); }
+    // (Noah v12c) no pause: it starts rising the moment you see it. A slow build to half the rear-up (F0-17), arms creeping up,
+    // then it snaps the rest of the way to full size (F18-20), holds there a beat, trembling (F21-25), and lunges in (F26)
+    const sp = (t) => { const p = lerpPose(k.lp, CPOSE.spread, t); p.tilt = 0; return p; };
+    if (F < 18) { const u = F / 17; return [sp(0.5 * (u * u * (3 - 2 * u) * 0.6 + u * 0.4)), 1]; }
+    if (F < 21) return [sp([0.74, 0.94, 1][F - 18]), 1];
+    if (F < 26) { const p = copyPose(CPOSE.spread), q = (F & 1) ? 1 : -1, g = (F - 21) / 5; p.wR = [p.wR[0] + 0.03 * q, p.wR[1] + 0.06 * g, p.wR[2]]; p.wL = [p.wL[0] - 0.03 * q, p.wL[1] + 0.06 * g, p.wL[2]]; p.hd = [p.hd[0], p.hd[1] + 0.03 * g, p.hd[2] - 0.04 * g]; p.sc = 1.08 + 0.02 * g; return [p, 1]; }
+    if (F === 26) { CR.smear = true; shake = Math.max(shake, 0.45); }
     CR.freeze = true; return [CPOSE.strike, 1];
   }
   if (CR.exitF > 0 && CR.pose) { CR.anim = 'exit'; const p = copyPose(CR.pose); p.hp = [p.hp[0] - 0.1, p.hp[1]]; return [p, 1]; }
