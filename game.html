@@ -1842,7 +1842,11 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   { const c = HQ(0, 0.02, 0.04); disc(c[0], c[1], 1.5, H0); }
   fillPoly(box(-0.16, 0.16, -0.16 - jd, -0.04, 0.05, 0.3), H0);
   if (!shadow && !o.away) {
-    if (jd >= 0.1) { fillPoly([HQ(-0.13, -0.05, 0.31), HQ(0.13, -0.05, 0.31), HQ(0.1, -0.05 - jd, 0.31), HQ(-0.1, -0.05 - jd, 0.31)], PAL.mouth); const a = HQ(-0.11, -0.05, 0.32), b = HQ(0.11, -0.05, 0.32); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
+    if (jd >= 0.1) { fillPoly([HQ(-0.13, -0.05, 0.31), HQ(0.13, -0.05, 0.31), HQ(0.1, -0.05 - jd, 0.31), HQ(-0.1, -0.05 - jd, 0.31)], PAL.mouth); const a = HQ(-0.11, -0.05, 0.32), b = HQ(0.11, -0.05, 0.32), lo = HQ(0, -0.05 - jd, 0.32);
+      // (Noah v11) open mouth: a midtone upper row, two bright fangs hanging into the dark, short points up from the lower jaw
+      const cx = Math.floor((a[0] + b[0]) / 2), ty = Math.floor((a[1] + b[1]) / 2), hw = Math.max(1, Math.round(Math.abs(b[0] - a[0]) / 2)), by = Math.max(ty + 2, Math.floor(lo[1]));
+      for (let dx = -hw; dx <= hw; dx++) { const x = cx + dx + 0.5; line(x, ty + 0.5, x, ty + 0.5, PAL.toothDk); if (dx % 2 === 0 && Math.abs(dx) !== 1) line(x, by + 0.5, x, by + 0.5, PAL.toothDk); }
+      for (const dx of hw >= 2 ? [-1, 1] : [0]) { const x = cx + dx + 0.5; line(x, ty + 0.5, x, Math.min(ty + 2, by - 1) + 0.5, PAL.tooth[0]); } }
     else {
       if (o.profile) { const c = HQ(nearSide * 0.15, -0.14, 0.12), d = HQ(nearSide * 0.15, -0.14, 0.29), fg = HQ(nearSide * 0.15, -0.17, 0.28); line(c[0], c[1], d[0], d[1], PAL.tooth[0]); if (fg[0] >= 0 && fg[1] >= 0 && fg[0] < W && fg[1] < H) put((fg[1] | 0) * W + (fg[0] | 0), PAL.tooth[0]); }
     }
