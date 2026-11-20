@@ -947,7 +947,7 @@ function strikeTick(dt) {
     else if (k.t > 4.6) strikeHit(); // you never turned around
     return;
   }
-  if (k.ph === 1) { if (k.t > 0.385) strikeHit(); return; } // 12 frames: still, head snap, wind-up, strike, hold; the light cuts on frame 12
+  if (k.ph === 1) { if (k.t > 0.72) strikeHit(); return; } // (Noah v12) 22 frames: still, head snap, rear up arms wide, hold, strike, hold; the light cuts on frame 22
   if (k.t > 1.3) { S.stk = null; D.hush = 2.5; setPhase('calm', 36 + R() * 10); D.falseT = -1; }
 }
 function strikeHit() {
@@ -1174,11 +1174,28 @@ function drawCloseup(k) {
     for (let i = 0; i < w * h; i++) if (a[i * 4 + 3] > (o.th || 96)) px(i % w, i / w | 0, ...ink);
     return y;
   };
+  const onP = new Uint8Array(w * h); // which pixels are paper (grime only lands there)
+  const vn = (x, y, sc, sd) => { const gx = x / sc, gy = y / sc, ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), H = (a, b) => hash2(a * 7 + sd * 131, b * 13 + sd * 71);
+    return (H(ix, iy) * (1 - u) + H(ix + 1, iy) * u) * (1 - v) + (H(ix, iy + 1) * (1 - u) + H(ix + 1, iy + 1) * u) * v; };
+  const tint = (x, y, k2, r, g, b) => { const i = y * w + x, c = d[i], L = lit(x, y) * (1 - k2); d[i] = col((c & 255) * k2 + r * L, (c >> 8 & 255) * k2 + g * L, (c >> 16 & 255) * k2 + b * L); };
+  // (Noah v12) found on the forest floor: mud smeared in from one side, a fold crease, a rain tide-line, grit, a muddy thumbprint
+  const grime = (seed, fold) => {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (!onP[y * w + x]) continue;
+      const m = vn(x, y, 26, seed) * 0.65 + vn(x, y, 9, seed + 3) * 0.35, edge = Math.max(0, 1 - Math.min(x - fold.x0, fold.x1 - x, y - fold.y0, fold.y1 - y) / 22);
+      const mud = clamp((m - 0.52) * 2.6 + edge * 0.55 + (y > fold.y1 - 40 ? (y - fold.y1 + 40) / 90 : 0), 0, 0.82); // heavier toward the edges and the bottom, where it sat in the dirt
+      if (mud > 0.02) tint(x, y, 1 - mud * 0.75, 96, 74, 46);
+      const st = vn(x, y, 64, seed + 9); if (st > 0.66 && st < 0.675) dark(x, y, 0.9); else if (st > 0.66) tint(x, y, 0.92, 170, 150, 110); // a dried rain stain with its darker tide-line
+      const n = hash2(x * 5 + seed, y * 7); if (n > 0.993) dark(x, y, 0.5); else if (n > 0.982 && mud > 0.15) tint(x, y, 0.7, 70, 52, 34); // grit
+      const cr = (x - fold.cx) * fold.ny - (y - fold.cy) * fold.nx; if (Math.abs(cr) < 0.6) dark(x, y, 0.72); else if (cr > 0.6 && cr < 1.8) tint(x, y, 0.85, 245, 240, 225); // the fold: a dark crease, light on one side
+    }
+    const tx = fold.tx, ty = fold.ty; for (let y = -9; y <= 9; y++) for (let x = -7; x <= 7; x++) { const r = Math.hypot(x / 7, y / 9); if (r > 1 || !onP[(ty + y) * w + tx + x]) continue; // thumbprint: whorls of mud
+      if (Math.sin(r * 22 + Math.atan2(y, x) * 0.3) > 0.1 && hash2(tx + x, ty + y) > 0.25) tint(tx + x, ty + y, 0.55, 82, 62, 40); }
+  };
   const paper = (x0, y0, x1, y1, seed, tornTop, tornRight) => {
     for (let y = y0 + 3; y < y1 + 4; y++) for (let x = x0 + 4; x < x1 + 5; x++) dark(x, y, 0.45); // shadow on the ground
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       if (tornTop && y < y0 + 2 + hash2(x >> 1, seed) * 5) continue; if (tornRight && x > x1 - 3 - hash2(y >> 1, seed + 1) * 7) continue;
-      const v = 214 - hash2(x * 2, y * 3 + seed) * 14 - (hash2(x >> 3, (y >> 3) + seed) > 0.8 ? 8 : 0); px(x, y, v, v * 0.95, v * 0.8); // faint blotches where the rain got it
+      const v = 206 - hash2(x * 2, y * 3 + seed) * 16 - (hash2(x >> 3, (y >> 3) + seed) > 0.8 ? 8 : 0); px(x, y, v, v * 0.93, v * 0.76); onP[y * w + x] = 1; // yellowed, a little uneven
     }
   };
   if (k === 'glasses') {
@@ -1195,22 +1212,37 @@ function drawCloseup(k) {
     const seed = k === 'page1' ? 3 : 9; paper(70, 8, 252, 172, seed, true, true);
     for (let y = 24; y < 168; y += 11) lineP(72, y, 244, y, 156, 168, 190); lineP(88, 10, 88, 170, 196, 120, 120); // ruled, with a margin
     const c = ITEM_CARD[k](); hand(c.lines.map(l => l.replace(/^"|"$/g, '')).join('  '), 92, 34, 138, 11, { seed });
+    grime(seed, k === 'page1' ? { x0: 70, x1: 252, y0: 8, y1: 172, cx: 160, cy: 90, nx: 0.97, ny: 0.24, tx: 228, ty: 150 } : { x0: 70, x1: 252, y0: 8, y1: 172, cx: 160, cy: 104, nx: 0.12, ny: -0.99, tx: 84, ty: 28 });
   } else if (k === 'notebook') {
     for (let y = 14; y < 172; y++) for (let x = 24; x < 300; x++) dark(x, y, 0.45);
     for (let y = 8; y < 168; y++) for (let x = 18; x < 296; x++) { const edge = y < 12 || y > 163 || x < 22 || x > 291; if (edge) px(x, y, 36, 52, 74); }
-    for (let y = 12; y < 164; y++) for (let x = 22; x < 292; x++) { const v = 214 - hash2(x * 2, y * 3) * 12 - (Math.abs(x - 157) < 8 ? (8 - Math.abs(x - 157)) * 5 : 0); px(x, y, v, v * 0.95, v * 0.82); }
+    for (let y = 12; y < 164; y++) for (let x = 22; x < 292; x++) { const v = 214 - hash2(x * 2, y * 3) * 12 - (Math.abs(x - 157) < 8 ? (8 - Math.abs(x - 157)) * 5 : 0); px(x, y, v, v * 0.93, v * 0.78); onP[y * w + x] = 1; }
     lineP(157, 12, 157, 164, 120, 108, 88); for (let y = 30; y < 162; y += 11) { lineP(28, y, 151, y, 160, 170, 190); lineP(163, y, 286, y, 160, 170, 190); }
     hand('D. Marsh', 30, 26, 120, 11, { font: 'italic 700 11px Georgia, serif', seed: 1 });
     hand('Thurs. Something keeps pace with me off the trail. It stops when I stop. I put the light on it and it went. It always comes back closer.', 30, 41, 120, 11, { seed: 2 });
     hand('Fri. Dropped my glasses. Can\'t find the trail. Keep the light on. Keep moving. Find a fire.', 166, 30, 118, 13, { seed: 4, mess: 2, slope: 0.05, font: 'italic 600 11px Georgia, serif', spread: 1.4 }); // rushed: bigger, running downhill
-  } else if (k === 'candy') { // (kept for later) a chocolate bar, wrapper torn back on one end so you can see what it is
-    for (let y = 70; y < 120; y++) for (let x = 64; x < 262; x++) dark(x + 5, y + 6, 0.5);
-    for (let y = 70; y < 116; y++) for (let x = 60; x < 258; x++) { const sh = y < 75 ? 1.2 : y > 110 ? 0.72 : 1, crimp = x > 246 && (x & 2);
-      if (x < 120) { const seg = ((x - 62) % 19 < 2) || ((y - 72) % 22 < 2); const cc = seg ? [62, 34, 20] : [104, 60, 36]; px(x, y, cc[0] * sh, cc[1] * sh, cc[2] * sh); continue; } // squares of chocolate
-      if (x < 128) { const fz = hash2(x, y) > 0.5; px(x, y, (fz ? 205 : 160) * sh, (fz ? 205 : 160) * sh, (fz ? 210 : 168) * sh); continue; } // torn foil
-      const c = crimp ? [130, 30, 26] : [176, 40, 32]; px(x, y, c[0] * sh, c[1] * sh, c[2] * sh); }
-    for (let y = 80; y < 106; y++) for (let x = 148; x < 236; x++) px(x, y, 226, 196, 120);
-    hand('COCOA', 160, 100, 80, 11, { font: '700 17px Georgia, serif', ink: [110, 40, 22], mess: 0, th: 110 });
+    grime(6, { x0: 22, x1: 292, y0: 12, y1: 164, cx: 90, cy: 100, nx: 0.6, ny: 0.8, tx: 270, ty: 140 });
+  } else if (k === 'candy') { // (Noah v12, kept for later) a loud gas-station candy bar: ZAPPO!, starburst, ad copy, torn back to the chocolate
+    const word = (t, x, y, font, ink, ol, olInk) => { if (ol) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [1, -1], [-1, 1], [2, 2], [1, 2], [2, 1]]) hand(t, x + dx, y + dy, 300, 20, { font, ink: olInk || [22, 16, 40], mess: 0, th: 90 }); hand(t, x, y, 300, 20, { font, ink, mess: 0, th: 90 }); };
+    const X0 = 44, X1 = 278, Y0 = 60, Y1 = 128;
+    for (let y = Y0; y < Y1 + 2; y++) for (let x = X0; x < X1; x++) dark(x + 6, y + 7, 0.45); // shadow
+    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) { const sh = y < Y0 + 5 ? 1.25 : y > Y1 - 6 ? 0.7 : 1 - (y - Y0) / (Y1 - Y0) * 0.12;
+      if (x < X0 + 58) { const seg = ((x - X0) % 19 < 2) || ((y - Y0 - 3) % 22 < 2); const cc = seg ? [58, 32, 18] : [104, 60, 36]; px(x, y, cc[0] * sh, cc[1] * sh, cc[2] * sh); continue; } // squares of chocolate
+      if (x < X0 + 58 + 5 + hash2(y >> 1, 4) * 6) { const fz = hash2(x, y) > 0.5; px(x, y, (fz ? 215 : 160) * sh, (fz ? 212 : 160) * sh, (fz ? 200 : 150) * sh); continue; } // torn gold-ish foil
+      if (x > X1 - 10) { const cr = (x & 2) ? 0.7 : 1; px(x, y, 30 * cr * sh, 70 * cr * sh, 190 * cr * sh); continue; } // crimped end
+      const diag = (x - y * 0.55) % 26, bolt = diag > 0 && diag < 3; // speed stripes
+      const c = bolt ? [70, 140, 255] : [26, 64, 200]; px(x, y, c[0] * sh, c[1] * sh, c[2] * sh); }
+    for (let y = Y0 + 4; y < Y1 - 4; y++) { const t = (y - Y0) / (Y1 - Y0); for (let x = 0; x < 12; x++) { const xx = Math.round(X0 + 96 + x + (t - 0.5) * 30 + (t > 0.45 && t < 0.55 ? 6 : 0)); px(xx, y, 255, 214, 40); } } // the lightning slash
+    const bx = 136, by = 94; for (let y = -30; y <= 30; y++) for (let x = -42; x <= 42; x++) { const a = Math.atan2(y, x), r = Math.hypot(x / 42, y / 30), sp = 0.74 + 0.26 * (Math.cos(a * 14) > 0 ? 1 : 0); // starburst
+      if (r < sp) { const edge = r > sp - 0.07; px(bx + x, by + y, edge ? 150 : 236, edge ? 20 : 40, edge ? 30 : 46); } }
+    word('ZAPPO!', 102, 102, 'italic 900 23px Impact, "Arial Black", sans-serif', [255, 236, 70], true);
+    word('PEANUT NOUGAT', 184, 89, '800 9px "Arial Black", Arial, sans-serif', [255, 255, 255], true, [10, 20, 80]);
+    word('BLAST!', 196, 105, 'italic 900 15px Impact, "Arial Black", sans-serif', [255, 214, 40], true);
+    word('MORE CRUNCH PER MUNCH!', 178, 119, '700 7px Arial, sans-serif', [220, 236, 255]);
+    for (let y = 61; y < 77; y++) for (let x = 240; x < 268; x++) { const r = Math.hypot((x - 254) / 14, (y - 69) / 7.5); if (r < 1) px(x, y, r > 0.85 ? 150 : 250, r > 0.85 ? 20 : 250, r > 0.85 ? 30 : 250); } // "NEW!" flash
+    word('NEW!', 244, 73, '900 8px "Arial Black", Arial, sans-serif', [210, 30, 40]);
+    word('NET WT 1.8 OZ', 228, 126, '700 5px Arial, sans-serif', [170, 196, 250]);
+    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) { const m = vn(x, y, 18, 2); if (m > 0.6) tint(x, y, 1 - (m - 0.6) * 1.6, 90, 70, 44); if (hash2(x * 3, y * 5) > 0.985) dark(x, y, 0.5); } // it's been on the ground: mud, grit
   }
   cx.putImageData(im, 0, 0);
 }
@@ -1500,6 +1532,9 @@ const CPOSE = {
   // inhale and wind up: near arm high and back, far arm low and forward, the whole body up and back
   CPOSE.antic = Object.assign({}, T, { hp: [1.38, -0.1], sh: [2.2, 0.05], hd: [-0.04, 2.24, 0.14], tilt: -22, et: -1, jaw: 0.06,
     wR: [0.6, 2.2, -0.05], eR: [0.7, 1.9, -0.1], wL: [-0.7, 1.35, 0.4], eL: [-0.62, 1.6, 0.25], cR: 1.25, cL: 1.25, ehR: 1, ehL: 1 });
+  // (Noah v12) the big wind-up: it rears up and throws both arms high and wide, claws spread, as big as it can make itself
+  CPOSE.spread = Object.assign({}, T, { hp: [1.42, -0.12], sh: [2.3, -0.05], shW: 0.4, hd: [0, 2.3, 0.08], tilt: 0, et: 0, jaw: 0.06, uf: -0.06,
+    eR: [0.84, 2.78, 0.15], wR: [1.28, 3.25, 0.38], eL: [-0.84, 2.78, 0.15], wL: [-1.28, 3.25, 0.38], cR: 1.25, cL: 1.25, ehR: 1, ehL: 1, sc: 1.08 });
   // snap: claws converge on you, crossing below the open jaw
   CPOSE.strike = Object.assign({}, T, { hp: [1.24, 0.1], sh: [2.0, 0.35], hd: [0, 1.95, 0.7], tilt: 0, et: 0, jaw: 0.15,
     wR: [0.15, 1.55, 1.1], eR: [0.55, 1.75, 0.55], wL: [-0.15, 1.55, 1.1], eL: [-0.55, 1.75, 0.55], cR: 1.25, cL: 1.25, ehR: 1, ehL: 1, sc: 1.12 });
@@ -1676,8 +1711,10 @@ function crAnim() {
     if (F <= 0) CR.eyeK = 0.45; // a slit, then the eyes are open
     if (F < 6) return [CPOSE.tower, 1];
     if (F < 8) return [CPOSE.tower2, 1];
-    if (F < 10) return [CPOSE.antic, 1];
-    if (F === 10) { CR.smear = true; shake = Math.max(shake, 0.45); }
+    // (Noah v12) bigger: from the head snap it rears up and spreads (F8-13, fast out, slow in), holds there trembling (F14-19), then lunges in
+    if (F < 14) { const u = (F - 7) / 6, e = 1 - (1 - u) ** 3; return [lerpPose(CPOSE.tower2, CPOSE.spread, e), 1]; }
+    if (F < 20) { const p = copyPose(CPOSE.spread), q = (F & 1) ? 1 : -1, g = (F - 14) / 6; p.wR = [p.wR[0] + 0.03 * q, p.wR[1] + 0.06 * g, p.wR[2]]; p.wL = [p.wL[0] - 0.03 * q, p.wL[1] + 0.06 * g, p.wL[2]]; p.hd = [p.hd[0], p.hd[1] + 0.03 * g, p.hd[2] - 0.04 * g]; p.sc = 1.08 + 0.02 * g; return [p, 1]; }
+    if (F === 20) { CR.smear = true; shake = Math.max(shake, 0.45); }
     CR.freeze = true; return [CPOSE.strike, 1];
   }
   if (CR.exitF > 0 && CR.pose) { CR.anim = 'exit'; const p = copyPose(CR.pose); p.hp = [p.hp[0] - 0.1, p.hp[1]]; return [p, 1]; }
