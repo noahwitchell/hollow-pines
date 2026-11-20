@@ -1386,6 +1386,13 @@ function drawCloseup(k) {
   const lineP = (x0, y0, x1, y1, r, g, b, t = 1) => { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5); for (let i = 0; i <= n; i++) for (let j = 0; j < t; j++) px(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n + j, r, g, b); };
   for (let i = 0; i < 70; i++) { const x0 = hash2(i, 11) * w, y0 = hash2(i, 12) * h, a = hash2(i, 13) * TAU, L = 6 + hash2(i, 14) * 9, v = 0.55 + hash2(i, 15) * 0.5; // pine needles
     for (let t = 0; t < L; t++) { const x = x0 + Math.cos(a) * t, y = y0 + Math.sin(a) * t; if (x >= 0 && y >= 0 && x < w && y < h) px(x, y, 92 * v, 70 * v, 40 * v); } }
+  const gnd = d.slice();
+  // (Noah v12) a little 3D camera for the things that lie on the ground: you're standing over them, looking down at an angle
+  const view3 = (pitch, D, F) => { const th = pitch * Math.PI / 180, C = [0, D * Math.sin(th), -D * Math.cos(th)], f = [0, -Math.sin(th), Math.cos(th)], u = [0, Math.cos(th), Math.sin(th)];
+    return { C, P: (q) => { const v = [q[0] - C[0], q[1] - C[1], q[2] - C[2]], zc = v[1] * f[1] + v[2] * f[2], yc = v[1] * u[1] + v[2] * u[2]; return [160 + F * v[0] / zc, 96 - F * yc / zc]; },
+      ray: (sx, sy) => { const a = (sx - 160) / F, b = (96 - sy) / F; return [a, f[1] + u[1] * b, f[2] + u[2] * b]; } }; };
+  const rotY = (v, a) => [v[0] * Math.cos(a) + v[2] * Math.sin(a), v[1], -v[0] * Math.sin(a) + v[2] * Math.cos(a)];
+
   // handwriting: a real font rendered small, thresholded to ink pixels, every word a little off the line
   const hand = (text, x0, y0, wMax, lh, o = {}) => {
     if (!handCv) handCv = document.createElement('canvas'); handCv.width = w; handCv.height = h;
@@ -1424,16 +1431,33 @@ function drawCloseup(k) {
       const v = 206 - hash2(x * 2, y * 3 + seed) * 16 - (hash2(x >> 3, (y >> 3) + seed) > 0.8 ? 8 : 0); px(x, y, v, v * 0.93, v * 0.76); onP[y * w + x] = 1; // yellowed, a little uneven
     }
   };
-  if (k === 'glasses') {
-    for (const sg of [-1, 1]) { const ox = 160 + sg * 40; for (let y = -26; y <= 30; y++) for (let x = -34; x <= 34; x++) if ((x / 33) ** 2 + ((y - 4) / 26) ** 2 < 1) dark(ox + x + 3, 96 + y, 0.6); } // shadow
-    for (const sg of [-1, 1]) { const ox = 160 + sg * 40, oy = 92;
-      for (let y = -26; y <= 26; y++) for (let x = -33; x <= 33; x++) if ((x / 31) ** 2 + (y / 24) ** 2 < 1) { const c = get(ox + x, oy + y); d[((oy + y) | 0) * w + ((ox + x) | 0)] = col((c & 255) * 0.9 + 22, (c >> 8 & 255) * 0.9 + 22, (c >> 16 & 255) * 0.9 + 26); }
-      for (let a = 0; a < 600; a++) { const t = a / 600 * TAU, c = Math.cos(t), s2_ = Math.sin(t), v = s2_ < -0.3 ? 1.15 : 0.8; for (const rr of [0, 1, 2]) px(ox + c * (33 - rr), oy + s2_ * (26 - rr), (rr === 1 ? 210 : 150) * v, (rr === 1 ? 205 : 148) * v, (rr === 1 ? 196 : 140) * v); }
-      lineP(ox - 18, oy - 16, ox - 10, oy - 20, 255, 255, 250, 1); }
-    for (let x = 150; x <= 170; x++) { const yb = 82 - Math.round(5 * Math.sin((x - 150) / 20 * Math.PI)); px(x, yb, 210, 206, 196); px(x, yb + 1, 150, 146, 138); } // the bridge, arched between the lenses
-    lineP(87, 86, 50, 62, 170, 166, 158, 2); lineP(50, 62, 42, 66, 170, 166, 158, 2); lineP(233, 86, 272, 70, 170, 166, 158, 2); lineP(272, 70, 282, 76, 170, 166, 158, 2); // the arms, one bent
-    const ix = 208, iy = 98; for (const [dx, dy] of [[-40, -26], [-10, -36], [26, -30], [36, 6], [12, 30], [-30, 22], [-44, 4]]) lineP(ix, iy, ix + dx * 0.62, iy + dy * 0.55, 240, 240, 236); // the crack, from where it hit
-    for (let a = 0; a < 80; a++) { const t = a / 80 * TAU; px(ix + Math.cos(t) * 5, iy + Math.sin(t) * 4, 220, 220, 214); }
+  if (k === 'glasses') { // (Noah v12) in perspective: lying on the ground, the frame leaning back on its arms, one arm bent, one lens cracked
+    const V = view3(50, 5.4, 210), yaw = 0.22, phi = 62 * Math.PI / 180, et = [0, Math.sin(phi), Math.cos(phi)], CX = 1.2, RX = 1.02, RY = 0.84;
+    const W3 = (a, b) => rotY([a, et[1] * b, et[2] * b], yaw), Pw = (q) => V.P(rotY(q, yaw)), PL = (a, b) => V.P(W3(a, b));
+    const LD = [0.55, -1, 0.45], shadowOf = (q) => { const t = q[1] / -LD[1]; return [q[0] + LD[0] * t, 0, q[2] + LD[2] * t]; }; // light from up and behind your left shoulder
+    const arms = [[[CX + RX, RY * 1.25], [CX + RX + 0.15, 0.06, 3.3]], [[-(CX + RX), RY * 1.25], [-(CX + RX) - 0.55, 0.12, 1.7], [-(CX + RX) - 1.25, 0.05, 2.5]]]; // the left arm bent outward
+    const armPts = arms.map(([h0, ...rest]) => [[h0[0], et[1] * h0[1], et[2] * h0[1]], ...rest]);
+    const seg3 = (A, B, fn) => { const n = 60; for (let i = 0; i <= n; i++) fn([A[0] + (B[0] - A[0]) * i / n, A[1] + (B[1] - A[1]) * i / n, A[2] + (B[2] - A[2]) * i / n]); };
+    const shade = (q, r, k2) => { const S = Pw(shadowOf(q)); for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + 0.5) dark(S[0] + x, S[1] + y, k2); };
+    // shadows first: rims and arms cast onto the ground (dots stamped once per pixel so they don't stack)
+    const sh = new Set(), stamp = (q) => { const S = Pw(shadowOf(q)); for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) sh.add(((S[1] + y) | 0) * w + ((S[0] + x) | 0)); };
+    for (const sg of [-1, 1]) for (let i = 0; i < 300; i++) { const al = i / 300 * TAU; stamp([sg * CX + RX * Math.cos(al), et[1] * (RY + RY * Math.sin(al)), et[2] * (RY + RY * Math.sin(al))]); }
+    for (const pts of armPts) for (let j = 0; j + 1 < pts.length; j++) seg3(pts[j], pts[j + 1], stamp);
+    for (const i of sh) if (i >= 0 && i < w * h) dark(i % w, i / w | 0, 0.55);
+    // lenses: the ground seen through faintly tinted glass
+    const Cl = rotY(V.C, -yaw), nrm = [0, -et[2], et[1]];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const dl = rotY(V.ray(x + 0.5, y + 0.5), -yaw), dn = dl[1] * nrm[1] + dl[2] * nrm[2]; if (!dn) continue;
+      const t = -(Cl[1] * nrm[1] + Cl[2] * nrm[2]) / dn, q = [Cl[0] + dl[0] * t, Cl[1] + dl[1] * t, Cl[2] + dl[2] * t], a2 = q[0], b2 = q[1] * et[1] + q[2] * et[2];
+      for (const sg of [-1, 1]) if (((a2 - sg * CX) / RX) ** 2 + ((b2 - RY) / RY) ** 2 < 1) { const c = d[y * w + x]; d[y * w + x] = col((c & 255) * 0.85 + 26, (c >> 8 & 255) * 0.85 + 27, (c >> 16 & 255) * 0.85 + 32); }
+    }
+    // arms (the far parts first), then the rims, the bridge, the crack and a glint
+    for (const pts of armPts) for (let j = 0; j + 1 < pts.length; j++) seg3(pts[j], pts[j + 1], (q) => { const S = Pw(q); px(S[0], S[1], 168, 164, 156); px(S[0] + 1, S[1], 132, 128, 122); });
+    for (const sg of [-1, 1]) for (let i = 0; i < 700; i++) { const al = i / 700 * TAU, top = Math.sin(al) > 0.2; for (const rr of [0, 0.05, 0.1]) { const S = PL(sg * CX + (RX - rr) * Math.cos(al), RY + (RY - rr) * Math.sin(al)); const v2 = rr === 0.05 ? 1 : 0.72, g2 = top ? 1.15 : 0.82; px(S[0], S[1], 210 * v2 * g2, 205 * v2 * g2, 196 * v2 * g2); } }
+    for (let i = 0; i <= 40; i++) { const a2 = -(CX - RX) + 2 * (CX - RX) * i / 40, b2 = RY * 1.62 + 0.18 * Math.sin(Math.PI * i / 40); const S = PL(a2, b2); px(S[0], S[1], 210, 206, 196); px(S[0], S[1] + 1, 150, 146, 138); }
+    const ic = [CX + 0.22, RY + 0.12]; for (const [dx, dy] of [[-0.8, 0.5], [-0.2, 0.75], [0.5, 0.62], [0.72, -0.12], [0.25, -0.62], [-0.6, -0.42], [-0.86, 0.06]]) { const A = PL(ic[0], ic[1]); const B = PL(ic[0] + dx * 0.85, ic[1] + dy * 0.85); lineP(A[0], A[1], B[0], B[1], 240, 240, 236); }
+    for (let i = 0; i < 60; i++) { const al = i / 60 * TAU, S = PL(ic[0] + Math.cos(al) * 0.13, ic[1] + Math.sin(al) * 0.11); px(S[0], S[1], 222, 222, 216); }
+    { const A = PL(-CX - 0.55, RY + 0.45), B = PL(-CX - 0.25, RY + 0.62); lineP(A[0], A[1], B[0], B[1], 255, 255, 250); }
   } else if (k === 'page1' || k === 'page2') {
     const seed = k === 'page1' ? 3 : 9; paper(70, 8, 252, 172, seed, true, true);
     for (let y = 24; y < 168; y += 11) lineP(72, y, 244, y, 156, 168, 190); lineP(88, 10, 88, 170, 196, 120, 120); // ruled, with a margin
@@ -1469,6 +1493,38 @@ function drawCloseup(k) {
     word('NEW!', 244, 73, '900 8px "Arial Black", Arial, sans-serif', [210, 30, 40]);
     word('NET WT 1.8 OZ', 228, 126, '700 5px Arial, sans-serif', [170, 196, 250]);
     for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) { const m = vn(x, y, 18, 2); if (m > 0.6) tint(x, y, 1 - (m - 0.6) * 1.6, 90, 70, 44); if (hash2(x * 3, y * 5) > 0.985) dark(x, y, 0.5); } // it's been on the ground: mud, grit
+    // (Noah v12) beat up, not new: crumpled wrapper catching the light in facets, two hard creases, the ink scuffed off in
+    // patches, the colors faded; the chocolate gone chalky with bloom
+    const cr1 = (x, y) => (x - X0) * 0.42 - (y - Y0) - 18, cr2 = (x, y) => (x - X0) - 150 + (y - Y0) * 0.35;
+    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) {
+      const i = y * w + x, c = d[i]; let r = c & 255, g = c >> 8 & 255, b = c >> 16 & 255;
+      const choc = x < X0 + 58;
+      if (!choc) {
+        const gy = vn(x, y + 1, 13, 11) - vn(x, y - 1, 13, 11), gx = vn(x + 1, y, 13, 11) - vn(x - 1, y, 13, 11), k2 = 1 + (gx * 0.6 - gy) * 4; // crumple facets lit from the top left
+        const L2 = (r + g + b) / 3; r = r * 0.86 + L2 * 0.14; g = g * 0.86 + L2 * 0.14; b = b * 0.86 + L2 * 0.14; // faded
+        r *= k2 * 0.92; g *= k2 * 0.92; b *= k2 * 0.92;
+        if (vn(x, y, 11, 21) > 0.8 && hash2(x, y * 3) > 0.35) { r = r * 0.6 + 120; g = g * 0.6 + 112; b = b * 0.6 + 96; } // ink scuffed off in a couple of spots
+        for (const cf of [cr1, cr2]) { const v = cf(x, y); if (Math.abs(v) < 0.8) { r *= 0.55; g *= 0.55; b *= 0.55; } else if (v > 0.8 && v < 2) { r += 40; g += 40; b += 36; } } // creases
+      } else {
+        if (hash2(x * 7, y * 3) > 0.96 || vn(x, y, 7, 31) > 0.8) { r = r * 0.7 + 50; g = g * 0.7 + 42; b = b * 0.7 + 34; } // bloom
+      }
+      d[i] = col(r, g, b);
+    }
+    // (Noah v12) in perspective: the flat wrapper above becomes the top of a bar lying on the ground, seen from where you stand
+    const TW = X1 - X0, TH = Y1 - Y0, tex = new Uint32Array(TW * TH);
+    for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) tex[y * TW + x] = d[(y + Y0) * w + x + X0];
+    d.set(gnd);
+    const V = view3(48, 5.4, 210), yaw = -0.3, BL = 5.4, BW = BL * TH / TW, BH = 0.3, Cl = rotY(V.C, -yaw), sc = (c, k2) => col((c & 255) * k2, (c >> 8 & 255) * k2, (c >> 16 & 255) * k2);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const dl = rotY(V.ray(x + 0.5, y + 0.5), -yaw); let best = 1e9, hit = null;
+      const tryP = (t, kk) => { if (!(t > 0 && t < best)) return; const q = [Cl[0] + dl[0] * t, Cl[1] + dl[1] * t, Cl[2] + dl[2] * t];
+        if (kk === 0 ? Math.abs(q[0]) <= BL / 2 && Math.abs(q[2]) <= BW / 2 : kk === 1 ? Math.abs(q[0]) <= BL / 2 && q[1] >= 0 && q[1] <= BH : Math.abs(q[2]) <= BW / 2 && q[1] >= 0 && q[1] <= BH) { best = t; hit = [kk, q]; } };
+      tryP((BH - Cl[1]) / dl[1], 0); if (dl[2]) tryP((-BW / 2 - Cl[2]) / dl[2], 1); if (dl[0]) tryP(((Cl[0] < 0 ? -BL : BL) / 2 - Cl[0]) / dl[0], 2);
+      const i = y * w + x;
+      if (hit) { const [kk, q] = hit, ux = clamp((q[0] + BL / 2) / BL * TW | 0, 0, TW - 1), vy = clamp((BW / 2 - q[2]) / BW * TH | 0, 0, TH - 1);
+        d[i] = kk === 0 ? tex[vy * TW + ux] : kk === 1 ? sc(tex[(TH - 2) * TW + ux], q[1] > BH - 0.04 ? 0.8 : 0.5) : sc(tex[vy * TW + (q[0] < 0 ? 1 : TW - 2)], 0.42); }
+      else if (dl[1] < 0) { const t = -Cl[1] / dl[1], gx = Cl[0] + dl[0] * t - 0.42, gz = Cl[2] + dl[2] * t + 0.3; if (Math.abs(gx) <= BL / 2 && Math.abs(gz) <= BW / 2) dark(x, y, 0.5); } // its shadow on the ground
+    }
   }
   cx.putImageData(im, 0, 0);
 }
@@ -1959,7 +2015,7 @@ function crAnim() {
       // from shoulder to claw, so they never fold up over the head. The small circle moves the whole arm, the hand twice as much
       const th = Math.PI * G + (sd > 0 ? 0 : Math.PI) + 0.4, dy = -0.07 * Math.sin(th), dz = 0.09 * Math.cos(th), open = 0.5 + 0.5 * Math.cos(th + Math.PI / 4);
       r[sd > 0 ? 'eR' : 'eL'] = [sd * 0.47, 1.43 + dy * 0.5, 1.34 + dz * 0.5];
-      r[sd > 0 ? 'wR' : 'wL'] = [sd * 0.58, 1.4 + dy, 1.98 + dz]; // a little wide, so head-on the claws come at you either side of the body r[sd > 0 ? 'cR' : 'cL'] = 0.45 + 0.8 * open;
+      r[sd > 0 ? 'wR' : 'wL'] = [sd * 0.36, 1.4 + dy, 1.98 + dz]; // (Noah v12h) forearms angled in from the elbows, hands closer together r[sd > 0 ? 'cR' : 'cL'] = 0.45 + 0.8 * open;
     }
     return [r, 2];
   }
@@ -2011,7 +2067,7 @@ function crJoints(p) {
   for (const s of [1, -1]) {
     const Hp = [s * 0.1, p.hp[0] + s * p.hpT, p.hp[1]], s0 = s > 0 ? p.sR : p.sL, Sh = up(s0 || [s * p.shW, p.sh[0] + s * p.shT, p.sh[1]]);
     const A = s > 0 ? p.aR : p.aL, e0 = s > 0 ? p.eR : p.eL;
-    let Wr = up(s > 0 ? p.wR : p.wL), E;
+    let Wr = up(s > 0 ? p.wR : p.wL), E; Wr = [Wr[0] - s * 0.05, Wr[1], Wr[2]]; // (Noah v12h) every pose: the forearms angle in a little, hands a touch closer together
     if (e0) E = up(e0);
     else { const dx = Wr[0] - Sh[0], dy = Wr[1] - Sh[1], dz = Wr[2] - Sh[2], d = Math.hypot(dx, dy, dz); if (d > ELB_MAX) { const k = ELB_MAX / d; Wr = [Sh[0] + dx * k, Sh[1] + dy * k, Sh[2] + dz * k]; } const po = s > 0 ? p.poleR : p.poleL, k = CR.viewSide || 0, pole = po || [lerp(s, 0, k), lerp(0, 1, k), lerp(-0.3, -0.4, k)]; E = ik(Sh, Wr, 0.6, 0.7, pole); } // elbows out face-on, back and up side-on
     const K = ik(Hp, A, 0.62, 0.52, [s * 0.15, 0, 1]);
