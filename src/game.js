@@ -6,7 +6,7 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
-let SHA = null, SHB = null; // shadow masks (see put)
+let SHA = null, SHB = null, CRM = null, MARK = false; // shadow masks (see put); CRM marks the creature's pixels for rim lights
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const wrapA = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
 const R = () => Math.random();
@@ -28,7 +28,7 @@ function resize() {
   const asp = VW() > 0 && VH() > 0 ? VW() / VH() : 16 / 9;
   H = 180; W = clamp(Math.round(H * asp), 240, 440) || 320;
   cv.width = W; cv.height = H;
-  img = ctx.createImageData(W, H); out32 = new Uint32Array(img.data.buffer); ob = new Uint32Array(W * H); LX = new Float32Array(W * H); LY = new Float32Array(W * H); LF = new Uint8Array(W * H); SHA = new Float32Array(W * H).fill(1); SHB = new Float32Array(W * H).fill(1);
+  img = ctx.createImageData(W, H); out32 = new Uint32Array(img.data.buffer); ob = new Uint32Array(W * H); LX = new Float32Array(W * H); LY = new Float32Array(W * H); LF = new Uint8Array(W * H); SHA = new Float32Array(W * H).fill(1); SHB = new Float32Array(W * H).fill(1); CRM = new Uint8Array(W * H);
 }
 addEventListener('resize', resize);
 resize();
@@ -1343,7 +1343,7 @@ let camX = 0, camY = 0;
 function s2(x, y) { return [(x - camX) * PPM + W / 2, (y - camY) * PPM + H / 2]; }
 let OV = null; // when set, pixels drawn are lit as if they stood at this world point
 let MASK = null, MV = 1, shOn = false; // shadow masks: SHA darkens all light (contact shadows), SHB only the flashlight (cast shadows)
-function put(i, col) { if (MASK) { if (MASK[i] > MV) MASK[i] = MV; return; } ob[i] = col; if (OV) { LF[i] = 1; LX[i] = OV[0]; LY[i] = OV[1]; } else LF[i] = 0; }
+function put(i, col) { if (MASK) { if (MASK[i] > MV) MASK[i] = MV; return; } if (MARK) CRM[i] = 1; ob[i] = col; if (OV) { LF[i] = 1; LX[i] = OV[0]; LY[i] = OV[1]; } else LF[i] = 0; }
 function disc(cx, cy, r, col) {
   const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r)), y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(H - 1, Math.ceil(cy + r)), r2 = r * r;
   for (let y = y0; y <= y1; y++) { const dy = y + 0.5 - cy; for (let x = x0; x <= x1; x++) { const dx = x + 0.5 - cx; if (dx * dx + dy * dy <= r2) put(y * W + x, col); } }
@@ -1485,7 +1485,9 @@ function ik(A, B, la, lb, hint) {
   const dx = B[0] - A[0], dy = B[1] - A[1], dz = B[2] - A[2], d = Math.hypot(dx, dy, dz) || 1e-6;
   if (d >= la + lb) { const t = la / (la + lb); return [A[0] + dx * t, A[1] + dy * t, A[2] + dz * t]; }
   const x1 = (la * la - lb * lb + d * d) / (2 * d), y1 = Math.sqrt(Math.max(0, la * la - x1 * x1)), ux = dx / d, uy = dy / d, uz = dz / d;
-  const hd = hint[0] * ux + hint[1] * uy + hint[2] * uz, px = hint[0] - hd * ux, py = hint[1] - hd * uy, pz = hint[2] - hd * uz, pl = Math.hypot(px, py, pz) || 1;
+  let hd = hint[0] * ux + hint[1] * uy + hint[2] * uz, px = hint[0] - hd * ux, py = hint[1] - hd * uy, pz = hint[2] - hd * uz, pl = Math.hypot(px, py, pz);
+  if (pl < 0.3 * (Math.hypot(...hint) || 1)) { const f = [0, 1, -0.2]; hd = f[1] * uy + f[2] * uz + f[0] * ux; px = f[0] - hd * ux; py = f[1] - hd * uy; pz = f[2] - hd * uz; pl = Math.hypot(px, py, pz); } // pole along the limb: no bend plane, so fall back to up
+  pl = pl || 1;
   return [A[0] + ux * x1 + px / pl * y1, A[1] + uy * x1 + py / pl * y1, A[2] + uz * x1 + pz / pl * y1];
 }
 // one foot through a gait: planted (moving back under the body exactly as the body moves forward), then a low swing
@@ -1559,7 +1561,7 @@ function runPose2(U, ls) {
 // a laboured breath), at most three, then just breathing. Never a tremble.
 function flinchPose(ls, F) {
   const p = copyPose(CPOSE.lean);
-  Object.assign(p, { hp: [1.04, -0.05], ux: -0.12, uf: -0.15, hd: [-0.1, 1.8, 0.55], tilt: -12, sR: [0.36, 1.95, 0.05], eR: [0.7, 1.7, 0.25], wR: [0.05, 2.02, 0.4], wmR: 3, wb: 35, cR: 0.5,
+  Object.assign(p, { hp: [1.04, -0.05], ux: -0.12, uf: -0.15, hd: [-0.1, 1.8, 0.55], tilt: -12, sR: [0.36, 1.95, 0.05], eR: [0.85, 1.7, 0.25], wR: [0.05, 2.02, 0.4], wmR: 3, wb: 35, cR: 0.5,
     eL: [-0.42, 1.35, -0.1], wL: [-0.4, 0.85, -0.2], wmL: 0, cL: 1.2, shield: 1 });
   p.aL = [-0.08, 0.12, -0.25 * sstep(3, 5, F)]; // the far foot steps back
   if (F >= 4 && F < 6) p.ux -= 0.08; // overshoots a pixel further away, then settles
@@ -1597,6 +1599,7 @@ function leanIdle(fc) {
   const s6 = Math.max(track(REACH_A, t - 6), track(REACH_B, t - 6)), h4 = track(REACH_A, t - 4) - track(REACH_B, t - 4);
   p.sh = [p.sh[0], p.sh[1] + 0.1 * s6]; p.hd = [p.hd[0] + 0.1 * h4, p.hd[1] - 0.15 * s6, p.hd[2] + 0.06 * s6]; // head drops as it leans into the reach // shoulders follow the hand, the head turns toward it, both a little late
   if (ic.lean && t < 30) p.uf = 0.08; // leans in
+  if (Math.max(rA, rB) > 0.6) p.jaw = 0.05; // the jaw cracks open as it reaches
   return ic.side > 0 ? p : mirPose(p);
 }
 // which way its light side is: +1 = the beam is on its right
@@ -1675,7 +1678,7 @@ function crJoints(p) {
     const A = s > 0 ? p.aR : p.aL, e0 = s > 0 ? p.eR : p.eL;
     let Wr = up(s > 0 ? p.wR : p.wL), E;
     if (e0) E = up(e0);
-    else { const dx = Wr[0] - Sh[0], dy = Wr[1] - Sh[1], dz = Wr[2] - Sh[2], d = Math.hypot(dx, dy, dz); if (d > ELB_MAX) { const k = ELB_MAX / d; Wr = [Sh[0] + dx * k, Sh[1] + dy * k, Sh[2] + dz * k]; } const po = s > 0 ? p.poleR : p.poleL, k = CR.viewSide || 0, pole = po || [lerp(s, 0, k), lerp(0, 0.4, k), lerp(-0.3, -1, k)]; E = ik(Sh, Wr, 0.6, 0.7, pole); } // elbows out face-on, back and up side-on
+    else { const dx = Wr[0] - Sh[0], dy = Wr[1] - Sh[1], dz = Wr[2] - Sh[2], d = Math.hypot(dx, dy, dz); if (d > ELB_MAX) { const k = ELB_MAX / d; Wr = [Sh[0] + dx * k, Sh[1] + dy * k, Sh[2] + dz * k]; } const po = s > 0 ? p.poleR : p.poleL, k = CR.viewSide || 0, pole = po || [lerp(s, 0, k), lerp(0, 1, k), lerp(-0.3, -0.4, k)]; E = ik(Sh, Wr, 0.6, 0.7, pole); } // elbows out face-on, back and up side-on
     const K = ik(Hp, A, 0.62, 0.52, [s * 0.15, 0, 1]);
     const Tt = [A[0] + s * 0.02, Math.max(0, A[1] - 0.12), A[2] + 0.15];
     // the wrist breaks: claws angle off the line of the forearm
@@ -1750,16 +1753,18 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   const at = ant.t * Math.PI / 180, ca = Math.cos(at), sa = Math.sin(at);
   // (notes v7) each beam is real 3D geometry: out to the side, rising a little, and sweeping BACK, so it still reads as
   // antlers side-on instead of collapsing into one stick. Low and wide from the front, as designed.
-  const AQ = (x, h, f) => Q([ant.p[0] + x * ca + h * sa, ant.p[1] - x * sa + h * ca, ant.p[2] + f - Math.abs(x) * ant.sw * 0.3]);
+  const vs = CR.viewSide || 0; // side-on, the across axis is screen-vertical: squeeze it and lift both beams so they fan above the skull
+  const AQ = (x, h, f, far) => { const xs = x * lerp(1, 0.35, vs), hh = h + 0.12 * vs + (far ? 0.15 * vs : 0); return Q([ant.p[0] + xs * ca + hh * sa, ant.p[1] - xs * sa + hh * ca, ant.p[2] + f - Math.abs(x) * ant.sw * 0.3]); };
   const BEAM = [[0.08, 0.1, -0.05], [0.34, 0.22, -0.25], [0.6, 0.3, -0.45]];
   CR.antDbg = [];
   for (const sg of [-1, 1]) {
     const pts = BEAM.map(b => [sg * b[0], b[1], b[2]]), hc = !shadow && o.profile && sg !== nearSide ? PAL.hide[1] : PAL.horn;
-    for (let i = 0; i < pts.length - 1; i++) { const a = AQ(...pts[i]), b = AQ(...pts[i + 1]); line(a[0], a[1], b[0], b[1], hc); }
-    if (!shadow) CR.antDbg.push(...pts.map(q => AQ(...q)));
+    const fr = sg !== nearSide;
+    for (let i = 0; i < pts.length - 1; i++) { const a = AQ(...pts[i], fr), b = AQ(...pts[i + 1], fr); line(a[0], a[1], b[0], b[1], hc); }
+    if (!shadow) CR.antDbg.push(...pts.map(q => AQ(...q, fr)));
     if (shadow) continue;
     for (const [base, len] of [[pts[1], 0.17], [lv3(pts[1], pts[2], 0.7), 0.15], [pts[2], 0.1]]) { // tines: up and a touch forward
-      const tip = [base[0] + sg * 0.02, base[1] + len, base[2] + 0.05], a = AQ(...base), b = AQ(...tip); line(a[0], a[1], b[0], b[1], hc);
+      const tip = [base[0] + sg * 0.02, base[1] + len, base[2] + 0.05], a = AQ(...base, fr), b = AQ(...tip, fr); line(a[0], a[1], b[0], b[1], hc);
       if (b[0] >= 0 && b[1] >= 0 && b[0] < W && b[1] < H) put((b[1] | 0) * W + (b[0] | 0), PAL.hornHi);
     }
   }
@@ -1829,12 +1834,12 @@ function drawCreature(dt = 1 / 30) {
       for (let y = Math.floor(oy - 4); y <= oy + 4; y++) for (let x = Math.floor(ox - 5); x <= ox + 5; x++) { if (x < 0 || y < 0 || x >= W || y >= H) continue; const dx = x + 0.5 - ox, dy = y + 0.5 - oy, u = dx * ca + dy * sa, v = -dx * sa + dy * ca, q = (u * u) / 12.25 + (v * v) / 2.25; if (q <= 1) { MV = Math.abs(u) <= 1.6 && Math.abs(v) <= 0.6 ? 0.35 : 0.55; put(y * W + x, 0); } } }
     MASK = null; MV = 1;
   }
-  OV = [CR.x, CR.y];
+  OV = [CR.x, CR.y]; MARK = !dying;
   const profile = !dying && Math.abs(-(fx * ux + fy * uy) / (Math.hypot(fx, fy) || 1)) < 0.64;
   const HQ = crDraw(Q, Qr, J, ant, ka, nearSide, { trem: CR.trem || 0, shield: CR.pose.shield || 0, profile });
   if (CR.smear && CR.prevW) for (const s of ['R', 'L']) { const a = CR.prevW[s], b = Q(J[s].W), d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, L = Math.min(d, 6), ex = b[0] + (a[0] - b[0]) / d * L, ey = b[1] + (a[1] - b[1]) / d * L, mx = (b[0] + ex) / 2, my = (b[1] + ey) / 2; line(mx, my, ex, ey, PAL.hide[2]); line(b[0], b[1], mx, my, PAL.claw, 0.8); } // a one-frame claw smear: short, widest at the claw
   CR.prevW = { R: Q(J.R.W), L: Q(J.L.W) };
-  OV = null;
+  OV = null; MARK = false; CR.rimUp = [Math.round(ux), Math.round(uy)];
   // eyes: locked to the head. A head tilt drops one eye a pixel; in profile only the near eye shows clearly; the shield hand covers one
   const es = Math.max(0.054, 1.7 / G), et = CR.pose.et || 0, fl = Math.hypot(fx, fy) || 1, faceCam = -(fx * ux + fy * uy) / fl;
   const eyes = [], off = Math.acos(clamp(Math.abs(faceCam), 0, 1)) * 180 / Math.PI;
@@ -1847,8 +1852,8 @@ function drawCreature(dt = 1 / 30) {
     eyes.push([e[0], e[1], off >= 30 && sg !== nearSide ? 0.5 : 1]);
   }
   if (!dying && CR.pose.jaw <= 0.03 && off < 55) { // teeth: a short horizontal row one pixel under the eyes, nudged toward where it faces
-    const ty = my + 1, tx = Math.floor(mx + (off >= 30 ? Math.sign(fx || 1) : 0)) + 0.5, n = off < 30 ? 1 : 0.5; OV = [CR.x, CR.y];
-    for (let dx = -1; dx <= 1; dx++) { if (n < 1 && dx === -Math.sign(fx || 1)) continue; const x = Math.floor(tx + dx), y = Math.floor(ty); if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); }
+    const ty = Math.floor(my + 2), tx = Math.floor(mx + (off >= 30 ? Math.sign(fx || 1) : 0)), wdt = off < 30 ? 2 : 1; OV = [CR.x, CR.y];
+    for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; for (let k = 0; k < ((dx & 1) ? 2 : 1); k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } // jagged: teeth of uneven length, wider than the eyes
     OV = null;
   }
   CR.eyeP = eyes; CR.eyeS = G;
@@ -2055,7 +2060,7 @@ function render(dt) {
   cam.x += (tx - cam.x) * kk; cam.y += (ty - cam.y) * kk;
   shake = Math.max(0, shake - dt * 2);
   camX = Math.round((cam.x + (shake > 0 ? (R() - 0.5) * shake * 0.5 : 0)) * PPM) / PPM; camY = Math.round((cam.y + (shake > 0 ? (R() - 0.5) * shake * 0.5 : 0)) * PPM) / PPM;
-  ob.fill(0); LF.fill(0); if (shOn) { SHA.fill(1); SHB.fill(1); shOn = false; }
+  ob.fill(0); LF.fill(0); CRM.fill(0); if (shOn) { SHA.fill(1); SHB.fill(1); shOn = false; }
   const hwM = W / 2 / PPM + 3, hhM = H / 2 / PPM + 3;
   const vis = [];
   near(decorG, camX, camY, Math.max(hwM, hhM), o => vis.push(o));
@@ -2190,6 +2195,16 @@ function overlays() {
     const face = Math.cos(wrapA(Math.atan2(P.y - DEER.y, P.x - DEER.x) - DEER.a));
     const I = beamAt(hx, hy, 3.2) * 2.6 * sstep(0.35, 0.8, face);
     if (I > 0.04) eyes(hx, hy, DEER.a, 0.07 * PPM, [232, 255, 220], I);
+  }
+  // rims on the creature: the edges facing your light catch it (dim warm); top edges catch a little sky, but only where it's already visible
+  if (CR.st !== 'away' && mode !== 'dying' && CR.rimUp) {
+    const lit = beam.out > 0.05 ? beamAt(CR.x, CR.y, 1.4) : 0, [sx, sy] = s2(CR.x, CR.y), [qx, qy] = s2(P.x, P.y), dl = Math.hypot(qx - sx, qy - sy) || 1, ldx = Math.round((qx - sx) / dl), ldy = Math.round((qy - sy) / dl), [rx2, ry2] = CR.rimUp;
+    const x0 = Math.max(1, Math.floor(sx - 30)), x1 = Math.min(W - 2, Math.ceil(sx + 30)), y0 = Math.max(1, Math.floor(sy - 45)), y1 = Math.min(H - 2, Math.ceil(sy + 12));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const i = y * W + x; if (!CRM[i]) continue;
+      if (lit > 0.03 && (ldx || ldy) && !CRM[(y + ldy) * W + x + ldx]) px1(x, y, 170, 125, 80, clamp(lit * 1.2, 0, 0.55));
+      else if ((rx2 || ry2) && !CRM[(y + ry2) * W + x + rx2]) { const c = out32[i], lum = (c & 255) + (c >> 8 & 255); if (lum > 14) px1(x, y, 92, 96, 104, 0.35); }
+    }
   }
   // reflectors flare in the beam
   for (const rf of reflectors) {
