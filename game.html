@@ -1841,7 +1841,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   fillPoly(box(-0.12, 0.12, -0.11, 0.11, -0.1, 0.2), H0);
   { const c = HQ(0, 0.02, 0.04); disc(c[0], c[1], 1.5, H0); }
   fillPoly(box(-0.16, 0.16, -0.16 - jd, -0.04, 0.05, 0.3), H0);
-  if (!shadow) {
+  if (!shadow && !o.away) {
     if (jd >= 0.1) { fillPoly([HQ(-0.13, -0.05, 0.31), HQ(0.13, -0.05, 0.31), HQ(0.1, -0.05 - jd, 0.31), HQ(-0.1, -0.05 - jd, 0.31)], PAL.mouth); const a = HQ(-0.11, -0.05, 0.32), b = HQ(0.11, -0.05, 0.32); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
     else {
       if (o.profile) { const c = HQ(nearSide * 0.15, -0.14, 0.12), d = HQ(nearSide * 0.15, -0.14, 0.29), fg = HQ(nearSide * 0.15, -0.17, 0.28); line(c[0], c[1], d[0], d[1], PAL.tooth[0]); if (fg[0] >= 0 && fg[1] >= 0 && fg[0] < W && fg[1] < H) put((fg[1] | 0) * W + (fg[0] | 0), PAL.tooth[0]); }
@@ -1935,22 +1935,23 @@ function drawCreature(dt = 1 / 30) {
   }
   OV = [CR.x, CR.y]; MARK = !dying;
   const profile = !dying && Math.abs(-(fx * ux + fy * uy) / (Math.hypot(fx, fy) || 1)) < 0.64;
-  const HQ = crDraw(Q, Qr, J, ant, ka, nearSide, { trem: CR.trem || 0, shield: CR.pose.shield || 0, profile });
+  const HQ = crDraw(Q, Qr, J, ant, ka, nearSide, { trem: CR.trem || 0, shield: CR.pose.shield || 0, profile, away: !dying && -(fx * ux + fy * uy) / (Math.hypot(fx, fy) || 1) < -0.3 });
   if (CR.smear && CR.prevW) for (const s of ['R', 'L']) { const a = CR.prevW[s], b = Q(J[s].W), d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, L = Math.min(d, 6), ex = b[0] + (a[0] - b[0]) / d * L, ey = b[1] + (a[1] - b[1]) / d * L, mx = (b[0] + ex) / 2, my = (b[1] + ey) / 2; line(mx, my, ex, ey, PAL.hide[2]); line(b[0], b[1], mx, my, PAL.claw, 0.8); } // a one-frame claw smear: short, widest at the claw
   CR.prevW = { R: Q(J.R.W), L: Q(J.L.W) };
   OV = null; MARK = false; CR.rimUp = [Math.round(ux), Math.round(uy)];
   // eyes: locked to the head. A head tilt drops one eye a pixel; in profile only the near eye shows clearly; the shield hand covers one
   const es = Math.max(0.054, 1.7 / G), et = CR.pose.et || 0, fl = Math.hypot(fx, fy) || 1, faceCam = -(fx * ux + fy * uy) / fl;
   const eyes = [], off = Math.acos(clamp(Math.abs(faceCam), 0, 1)) * 180 / Math.PI;
+  const away = !dying && faceCam < -0.3; // turned away from you: the face is on the far side of the skull, nothing shows
   const eA = HQ(-es, 0.06, 0.18), eB = HQ(es, 0.06, 0.18), my = Math.floor((eA[1] + eB[1]) / 2) + 0.5, mx = (eA[0] + eB[0]) / 2, dir = Math.sign(eB[0] - eA[0]) || 1;
   const gap = off < 30 ? 1.5 : 1, pos = { [-1]: [Math.floor(mx - dir * gap) + 0.5, my], [1]: [Math.floor(mx + dir * gap) + 0.5, my] };
   for (const sg of [-1, 1]) {
-    if (CR.pose.shield === sg) continue;
+    if (away || CR.pose.shield === sg) continue;
     if (off > 55 && sg !== nearSide) continue;
     const e = off > 55 ? HQ(sg * es, 0.06, 0.18) : pos[sg].slice(); if (et === sg) { e[0] -= Math.round(ux); e[1] -= Math.round(uy); }
     eyes.push([e[0], e[1], off >= 30 && sg !== nearSide ? 0.5 : 1]);
   }
-  if (!dying && CR.pose.jaw < 0.1 && off < 55) { // teeth: a short horizontal row one pixel under the eyes, nudged toward where it faces
+  if (!dying && !away && CR.pose.jaw < 0.1 && off < 55) { // teeth: a short horizontal row one pixel under the eyes, nudged toward where it faces
     const open = CR.pose.jaw > 0.03, ty = Math.floor(my + 2) + (open ? 1 : 0), tx = Math.floor(mx + (off >= 30 ? Math.sign(fx || 1) : 0)), wdt = off < 30 ? 2 : 1; OV = [CR.x, CR.y];
     if (open) for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx, y = ty - 1; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.mouth); } // the jaw drops: a dark gap, the row a pixel lower
     if (window.HP_FANGS !== false) { for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; if (x >= 0 && ty >= 0 && x < W && ty < H) put(ty * W + x, PAL.toothDk); } for (const dx of [-1, 1]) { const x = tx + dx; for (let k = 0; k < 2; k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } } // (Noah v11) two bright 2 px fangs over a midtone row: reads as fangs, still a full mouth
