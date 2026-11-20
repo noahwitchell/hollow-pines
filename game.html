@@ -1953,7 +1953,7 @@ function drawCreature(dt = 1 / 30) {
   if (!dying && CR.pose.jaw < 0.1 && off < 55) { // teeth: a short horizontal row one pixel under the eyes, nudged toward where it faces
     const open = CR.pose.jaw > 0.03, ty = Math.floor(my + 2) + (open ? 1 : 0), tx = Math.floor(mx + (off >= 30 ? Math.sign(fx || 1) : 0)), wdt = off < 30 ? 2 : 1; OV = [CR.x, CR.y];
     if (open) for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx, y = ty - 1; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.mouth); } // the jaw drops: a dark gap, the row a pixel lower
-    if (window.HP_FANGS) { for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; if (x >= 0 && ty >= 0 && x < W && ty < H) put(ty * W + x, PAL.toothDk); } for (const dx of [-1, 1]) { const x = tx + dx; for (let k = 0; k < 2; k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } } // test: two 2 px fangs, a gap between
+    if (window.HP_FANGS !== false) { for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; if (x >= 0 && ty >= 0 && x < W && ty < H) put(ty * W + x, PAL.toothDk); } for (const dx of [-1, 1]) { const x = tx + dx; for (let k = 0; k < 2; k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } } // (Noah v11) two bright 2 px fangs over a midtone row: reads as fangs, still a full mouth
     else for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; for (let k = 0; k < ((dx & 1) ? 2 : 1); k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } // jagged: teeth of uneven length, wider than the eyes
     OV = null;
   }
