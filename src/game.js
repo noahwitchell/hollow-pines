@@ -67,12 +67,12 @@ const PAL = {
   bush: ['#3d5a2c', '#4a6833', '#2f4622', '#55703a'].map(C),
   stump: ['#a39c8e', '#8a8477', '#6a655b'].map(C),
   hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#211d18'), hornHi: C('#3a342a'), tooth: ['#b3a684', '#d8ceb0'].map(C), toothDk: C('#988c6e'), claw: C('#35302a'), glint2: C('#f4efe0'), mouth: C('#040303'),
-  deer: ['#7d5b3c', '#6a4b30', '#d8cdb8'].map(C), jacket: C('#3f4a5c'), hair: C('#3a2a20'), hand: C('#c9a98a'), torch: C('#d0d0cc'),
+  deer: ['#a57c52', '#7a5636', '#ece4d4'].map(C), jacket: C('#3f4a5c'), hair: C('#3a2a20'), hand: C('#c9a98a'), torch: C('#d0d0cc'),
   camper: [C('#b8503a'), C('#5a2418'), C('#d9b08c'), C('#262422'), C('#e0d6c0')],
   tent: ['#4f6a52', '#3c5440', '#6b8a6c'].map(C), car: ['#6a4a3c', '#53392e', '#1d2227', '#a8b0b8'].map(C), refl: C('#cfe6f2'),
   stone: ['#7d7a72', '#5f5c56'].map(C), log: ['#5a4230', '#7c6248', '#3c2c20'].map(C), post: C('#4a3a2a'),
   plank: ['#6e5638', '#5a452c', '#7d6442'].map(C), bone: [C('#cfc6b0'), C('#a49b86')], glassF: C('#9a9aa0'), paper: [C('#cfc5a8'), C('#6a6250')], wrap: [C('#a83a2a'), C('#d8c8a0')], pack: [C('#3d5a7a'), C('#2a3f57')], torn: [C('#7a6a3a'), C('#5a4c28'), C('#1a1612')], blood: [C('#33170f'), C('#3e120c'), C('#240806')],
-  coon: ['#6b6862', '#3a3835', '#a9a59b', '#1c1b1a'].map(C), rabbit: ['#7a6650', '#5a4a3a', '#d8d0c0'].map(C), fox: ['#a8582a', '#7a3c1c', '#e8e0d0', '#2a1a12'].map(C), owl: C('#4a4036'), stripe: [C('#c8c0a8'), C('#a8432c')],
+  coon: ['#6b6862', '#3a3835', '#a9a59b', '#1c1b1a'].map(C), rabbit: ['#9c8c76', '#6e604e', '#ece6da'].map(C), fox: ['#a8582a', '#7a3c1c', '#e8e0d0', '#2a1a12'].map(C), owl: C('#4a4036'), stripe: [C('#c8c0a8'), C('#a8432c')],
 };
 
 const roadX = y => 3 * Math.sin(y * 0.031) + 1.5 * Math.sin(y * 0.083 + 1);
@@ -977,20 +977,19 @@ function syncHP(flash) { // the bar only shows when your health changes, then fa
 function spawnDeer(dd = 18 + R() * 7, quiet = true) {
   const a = (beam.out > 0.2 ? beam.aim : P.face) + (R() - 0.5) * 0.4;
   const p = placeFree(P.x + Math.cos(a) * dd, P.y + Math.sin(a) * dd, 0.6); if (!p) return;
-  Object.assign(DEER, { on: true, x: p[0], y: p[1], a: a + Math.PI + (R() - 0.5) * 0.6, st: 'watch', t: 0, litT: 0, stepT: 0, quiet: quiet });
+  Object.assign(DEER, { on: true, x: p[0], y: p[1], a: a + Math.PI + (R() - 0.5) * 0.6, st: 'watch', t: 0, litT: 0, stepT: 0, quiet: quiet, feet: null });
 }
 function updateDeer(dt) {
   if (!DEER.on) return;
-  DEER.t += dt;
-  const d = Math.hypot(DEER.x - P.x, DEER.y - P.y);
-  if (DEER.st === 'watch') {
-    DEER.a += clamp(wrapA(Math.atan2(P.y - DEER.y, P.x - DEER.x) - DEER.a), -1.5 * dt, 1.5 * dt);
-    if (beamAt(DEER.x, DEER.y, 1.6) > 0.05) DEER.litT += dt;
-    if (d < 9 || DEER.litT > 3 || DEER.t > 30 || (P.mode === 'run' && d < 16)) { DEER.st = 'flee'; DEER.t = 0; if (!DEER.quiet) { snd.deer(DEER.x, DEER.y); fear = Math.max(fear, 0.45); } }
-  } else {
-    const ax = DEER.x - P.x, ay = DEER.y - P.y, L = Math.hypot(ax, ay) || 1;
-    moveTo(DEER, DEER.x + ax / L * 3, DEER.y + ay / L * 3, 7, dt);
-    if (d > 45 || DEER.t > 7) DEER.on = false;
+  if (!DEER.feet) beastInit(DEER, 'deer', DEER.st === 'flee');
+  DEER.acc += dt;
+  while (DEER.acc >= 1 / 30) { DEER.acc -= 1 / 30; DEER.t += 1 / 30;
+    const d = Math.hypot(DEER.x - P.x, DEER.y - P.y);
+    if (DEER.st === 'watch') {
+      if (beamAt(DEER.x, DEER.y, 1.6) > 0.05) DEER.litT += 1 / 30;
+      if (d < 9 || DEER.litT > 3 || DEER.t > 30 || (P.mode === 'run' && d < 16)) { DEER.st = 'flee'; DEER.t = 0; if (!DEER.quiet) { snd.deer(DEER.x, DEER.y); fear = Math.max(fear, 0.45); } }
+    } else if (d > 45 || DEER.t > 7) { DEER.on = false; DEER.feet = null; return; }
+    beastFrame(DEER, BEAST.deer, DEER.st === 'flee');
   }
 }
 
@@ -999,6 +998,132 @@ function updateDeer(dt) {
 // an owl crossing overhead, now and then a deer. They rustle and their eyes catch the beam too, so every noise is a question.
 let critters = [], critT = 14, owl = null;
 const CRIT = { raccoon: { sp: 3.2, flee: 5, len: 0.42 }, rabbit: { sp: 6.5, flee: 6.5, len: 0.24 }, fox: { sp: 5.5, flee: 8, len: 0.5 } };
+// (Noah v12, animation director's notes) the animals walk on legs: feet are pinned to the ground while they're down, the body
+// is moved by the gait (slow on contact, fast in flight), everything bobs and stretches in whole pixels on held drawings,
+// headings snap to 16 directions, and every bolt has its anticipation. No cast shadows, no ground lines.
+// feet: [front 1 / hind -1, side, contact start (fraction of cycle), frames down]
+const BEAST = {
+  rabbit: { pal: 'rabbit', len: 0.46, w: 0.06, hip: 0.14, hb: 0.07, br: 1.7, head: 0.25, hf: 0.07, hr: 1.5, sp: 6.5, N: 8,
+    feet: [[-1, -1, 0, 3], [-1, 1, 0, 3], [1, -1, 0.75, 2], [1, 1, 0.75, 2]], adv: [1, 3, 3, 3, 3, 2, 1, 0], bob: [0, 0, 1, 1, 2, 2, 0, 0], ext: [0.7, 0.8, 1.1, 1.1, 1.1, 1, 0.85, 0.75], prep: 9 },
+  raccoon: { pal: 'coon', len: 0.5, w: 0.09, hip: 0.22, hb: 0.07, br: 1.6, head: 0.25, hf: 0.1, hr: 1.4, sp: 3.2, N: 8,
+    feet: [[1, -1, 0, 5], [-1, -1, 0, 5], [1, 1, 0.5, 5], [-1, 1, 0.5, 5]], adv: [1, 1.2, 1, 0.8, 1, 1.2, 1, 0.8], bob: [0, 1, 0, 0, 0, 1, 0, 0], ext: [1, 1, 1, 1, 1, 1, 1, 1], sway: 1, prep: 8 },
+  fox: { pal: 'fox', len: 0.7, w: 0.06, hip: 0.36, hb: 0.06, br: 1.2, head: 0.44, hf: 0.1, hr: 1.3, sp: 5.5, N: 10,
+    feet: [[-1, -1, 0, 3], [-1, 1, 0.1, 3], [1, 1, 0.4, 3], [1, -1, 0.5, 3]], adv: [0.8, 0.9, 1, 1.1, 1.2, 1.2, 1.1, 1, 0.9, 0.8], bob: [0, 0, 1, 0, 0, 0, 0, 1, 0, 0], ext: [1, 1, 1, 1, 1.15, 1.15, 1, 1, 0.85, 0.85], prep: 6 },
+  deer: { pal: 'deer', len: 1.2, w: 0.12, hip: 0.82, hb: 0.12, br: 1.8, head: 1.22, hf: 0.18, hr: 1.5, sp: 7, N: 12,
+    feet: [[-1, -1, 0, 4], [-1, 1, 0.08, 4], [1, 1, 0.42, 4], [1, -1, 0.5, 4]], adv: [0.8, 0.9, 1, 1.1, 1.2, 1.2, 1.2, 1.1, 1, 0.9, 0.8, 0.8], bob: [0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0], ext: [1, 1, 1, 1.1, 1.12, 1.1, 1, 1, 0.9, 0.88, 0.9, 1], prep: 12,
+    stot: { N: 16, adv: [0, 0, 0, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 1, 0, 0], bob: [-1, -1, -1, 1, 1, 3, 3, 3, 3, 3, 3, 0, 0, -1, -1, -1], ext: [0.9, 0.9, 0.9, 1.1, 1.1, 1, 1, 1, 1, 1, 1, 1, 0.95, 0.9, 0.9, 0.9], down: [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1] } },
+};
+for (const k in BEAST) { const B = BEAST[k]; B.advS = B.adv.reduce((a, b) => a + b, 0); if (B.stot) B.stot.advS = B.stot.adv.reduce((a, b) => a + b, 0); }
+const SNAP16 = TAU / 16;
+function hipW(c, B, fr, sd, a = c.a, ext = 1) { const fx = Math.cos(a), fy = Math.sin(a); return [c.x + fx * fr * B.len / 2 * ext - fy * sd * B.w, c.y + fy * fr * B.len / 2 * ext + fx * sd * B.w]; }
+function beastInit(c, kind, running) {
+  Object.assign(c, { kind, gf: 0, acc: 0, fr: 0, mode: running ? 'run' : 'idle', pf: 0, ha: c.a, ta: c.a, aH: [c.a, c.a], stots: kind === 'deer' && !running ? 2 : 0, ear: 0, dab: 0, up: 0, next: 30 + (R() * 60 | 0), hop: 0, zig: 0, bodyAt: -1, want: c.a });
+  c.feet = BEAST[kind].feet.map(([fr, sd]) => { const h = hipW(c, BEAST[kind], fr, sd); return { x: h[0], y: h[1], down: true, lift: 0 }; });
+}
+function shuffle(c, B, newA) { c.a = newA; c.feet.forEach((f, j) => { if (B.feet[j][0] > 0 || R() < 0.5) { f.down = false; f.lift = 2; } }); }
+// one 30 fps frame of the legs and the body's motion
+function beastLegs(c, B) {
+  c.aH.unshift(c.a); c.aH.length = 3; if (c.fr % 2 === 0) c.ta = c.aH[2]; // the tail follows two frames behind
+  if (c.mode !== 'run') {
+    c.feet.forEach((f, j) => { if (!f.down && --f.lift <= 0) { const h = hipW(c, B, B.feet[j][0], B.feet[j][1]); f.x = h[0]; f.y = h[1]; f.down = true; } });
+    return;
+  }
+  const g = c.stots > 0 ? B.stot : B, N = g.N, i = c.gf % N, step = B.sp * N / 30 * g.adv[i] / g.advS;
+  if (step > 0) moveTo(c, c.x + Math.cos(c.a) * 3, c.y + Math.sin(c.a) * 3, step * 30, 1 / 30);
+  B.feet.forEach(([fr, sd, st, du], j) => {
+    const f = c.feet[j], ph = ((c.gf - Math.round(st * N)) % N + N) % N, down = c.stots > 0 ? !!g.down[i] : ph < du;
+    if (down && !f.down) { const h = hipW(c, B, fr, sd), D = B.sp * (c.stots > 0 ? 5 : du) / 30 * 0.5; f.x = h[0] + Math.cos(c.a) * D; f.y = h[1] + Math.sin(c.a) * D; }
+    f.down = down;
+  });
+  c.gf++; c.ci = i;
+  if (c.stots > 0 && c.gf >= N) { c.stots--; c.gf = 0; }
+}
+// one 30 fps frame of what it's doing: watching, rummaging, frozen; the wind-up to the bolt; the bolt
+function beastFrame(c, B, startFlee) {
+  c.fr++;
+  const away = Math.atan2(c.y - P.y, c.x - P.x), toP = away + Math.PI;
+  if (startFlee && c.mode === 'idle') { c.mode = 'prep'; c.pf = 0; c.a0 = c.a; }
+  if (c.mode === 'idle') {
+    if (c.kind === 'fox' || c.kind === 'deer') { // it watches you: the head turns first, in steps, the body follows with a shuffle
+      const dh = wrapA(toP - c.ha);
+      if (Math.abs(dh) > SNAP16 * 0.6 && c.fr >= c.next) { c.ha += Math.sign(dh) * SNAP16; c.next = c.fr + 30 + (R() * 30 | 0); c.bodyAt = c.fr + 5; }
+      if (c.fr === c.bodyAt && Math.abs(wrapA(c.ha - c.a)) > SNAP16 * 1.5) shuffle(c, B, c.a + Math.sign(wrapA(c.ha - c.a)) * SNAP16);
+    } else if (c.kind === 'raccoon') { // rummaging: head down, bursts of paw dabs, a look up, a shuffle-turn now and then
+      if (c.fr >= c.next) { const r = R(); if (r < 0.45) c.dab = 3 + (R() * 3 | 0); else if (r < 0.75) c.up = 20 + (R() * 20 | 0); else shuffle(c, B, c.a + (R() < 0.5 ? -1 : 1) * SNAP16); c.next = c.fr + 40 + (R() * 50 | 0); }
+      if (c.dab > 0 && c.fr % 4 === 0) c.dab--; if (c.up > 0) c.up--;
+      c.ha = c.a;
+    } else { // the rabbit freezes; now and then one ear twitches
+      if (c.fr >= c.next) { c.ear = 4; c.next = c.fr + 60 + (R() * 60 | 0); } if (c.ear > 0) c.ear--;
+      c.ha = c.a;
+    }
+  } else if (c.mode === 'prep') { // anticipation
+    const f = c.pf++, L = B.prep, piv = (k) => { c.a = c.a0 + wrapA(away - c.a0) * k; c.ha = c.a; };
+    if (c.kind === 'rabbit') { if (f === 7) piv(0.5); if (f === 8) piv(1); }
+    else if (c.kind === 'fox') { if (f === 3) piv(0.5); if (f === 4) piv(1); }
+    else if (c.kind === 'raccoon') { if (f === 6) piv(0.5); if (f === 7) piv(1); }
+    else { if (f === 8) piv(0.25); if (f === 9) piv(0.5); if (f === 10) piv(0.75); if (f === 11) piv(1); }
+    if (c.pf >= L) { c.mode = 'run'; c.gf = c.kind === 'rabbit' ? 1 : 0; c.want = away; }
+  } else { // the bolt: steer away from you in snapped steps; the rabbit only changes course when it lands
+    if (c.kind === 'rabbit') { if (c.ci === 6) { c.hop++; if (c.hop % 2 === 0) c.zig = c.zig > 0 ? -0.6 : 0.6; c.a = away + c.zig; } }
+    else if (c.fr % 3 === 0) c.a += clamp(wrapA(away - c.a), -SNAP16, SNAP16);
+    c.ha = c.a;
+  }
+  beastLegs(c, B);
+}
+const OUTL = C('#120e0a');
+const lighten = (col, k) => { const r = col & 255, g = col >> 8 & 255, b = col >> 16 & 255; return (0xff000000 | (Math.min(255, b + (255 - b) * k) | 0) << 16 | (Math.min(255, g + (255 - g) * k) | 0) << 8 | (Math.min(255, r + (255 - r) * k) | 0)) >>> 0; };
+function drawBeast(c) {
+  const B = BEAST[c.kind]; if (!c.feet) return;
+  const [sx, sy] = s2(c.x, c.y); if (!onScr(sx, sy, 26)) { c.eyeS = null; return; }
+  const [lx, ly] = leanV(sx, sy, 1), LL = Math.hypot(lx, ly) || 1, lux = lx / LL, luy = ly / LL, U = 12.5;
+  const a = Math.round(c.a / SNAP16) * SNAP16, fx = Math.cos(a), fy = Math.sin(a), ha = Math.round(c.ha / SNAP16) * SNAP16, hx = Math.cos(ha), hy = Math.sin(ha);
+  const run = c.mode === 'run', g = c.stots > 0 ? B.stot : B, i = c.ci != null ? c.ci : 0;
+  let bob = run ? g.bob[i] : 0; const ext = run ? g.ext[i] : 1, pf = c.pf, prep = c.mode === 'prep';
+  if (prep && c.kind === 'rabbit' && pf >= 4) bob = -1; // crouch
+  const pc = PAL[B.pal], dark = pc[1], body = pc[0], rim = lighten(body, 0.22), legC = c.kind === 'fox' ? pc[3] : c.kind === 'raccoon' ? pc[3] : OUTL;
+  let sway = 0; if (run && B.sway) sway = c.feet[0].down ? -1 : 1; // the waddle leans over the planted side
+  const Pj = (wx, wy, h, b = bob) => { const [x, y] = s2(wx, wy); return [Math.floor(x + lux * (h * U + b) - fy * sway) + 0.5, Math.floor(y + luy * (h * U + b) + fx * sway) + 0.5]; };
+  const G = (q) => { const [x, y] = s2(q[0], q[1]); return [Math.floor(x) + 0.5, Math.floor(y) + 0.5]; };
+  const legs = (far) => B.feet.forEach(([fr, sd], j) => {
+    if ((fx * sd < 0) !== far) return; const f = c.feet[j], hw = hipW(c, B, fr, sd, a, ext), hp = Pj(hw[0], hw[1], B.hip);
+    const fp = f.down ? G([f.x, f.y]) : Pj(hw[0] - fx * fr * 0.06, hw[1] - fy * fr * 0.06, B.hip * 0.45);
+    line(hp[0], hp[1], fp[0], fp[1], legC, 0);
+  });
+  const rw = [c.x - fx * B.len / 2 * ext, c.y - fy * B.len / 2 * ext], fw = [c.x + fx * B.len / 2 * ext, c.y + fy * B.len / 2 * ext];
+  legs(true);
+  // tail, behind the body
+  const tx = Math.cos(c.ta), ty = Math.sin(c.ta);
+  if (c.kind === 'fox') for (let k = 1; k <= 3; k++) { const q = Pj(rw[0] - tx * 0.13 * k, rw[1] - ty * 0.13 * k, B.hip * (0.85 - 0.12 * k)); disc(q[0], q[1], 1.3 - 0.15 * k, k === 3 ? pc[2] : body); }
+  else if (c.kind === 'raccoon') for (let k = 1; k <= 4; k++) { const q = Pj(rw[0] - tx * 0.08 * k, rw[1] - ty * 0.08 * k, 0.16 - 0.02 * k, bob - sway * 2); disc(q[0], q[1], 1.1, k % 2 ? pc[3] : pc[2]); }
+  // body: belly in shadow, back catching the light
+  const r0 = Pj(rw[0], rw[1], B.hip + B.hb), f0 = Pj(fw[0], fw[1], B.hip + B.hb);
+  line(r0[0], r0[1], f0[0], f0[1], OUTL, B.br + 0.8); // a dark edge so the silhouette reads against the soil
+  line(r0[0], r0[1], f0[0], f0[1], dark, B.br);
+  line(r0[0] + lux, r0[1] + luy, f0[0] + lux, f0[1] + luy, body, Math.max(0.7, B.br - 0.5));
+  line(r0[0] + lux * B.br, r0[1] + luy * B.br, f0[0] + lux * B.br, f0[1] + luy * B.br, rim, 0);
+  if (c.kind === 'rabbit') { const q = Pj(rw[0] - fx * 0.03, rw[1] - fy * 0.03, B.hip + 0.07); if (run || prep && pf >= 4) disc(q[0], q[1], 1.1, pc[2]); } // the white scut flashes on the bolt
+  if (c.kind === 'deer') { const q = Pj(rw[0] - fx * 0.05, rw[1] - fy * 0.05, B.hip + (run ? 0.26 : 0.12)); if (run) disc(q[0], q[1], 1.5, pc[2]); else line(q[0], q[1], q[0] - lux * 2, q[1] - luy * 2, dark, 0); } // the flag goes up and stays up
+  // head and neck
+  const drop = c.kind === 'fox' && prep && pf < 3 ? -1 : 0, low = c.kind === 'raccoon' && c.mode === 'idle' && c.up === 0 ? -0.08 : 0, snap = c.kind === 'deer' && prep ? 0.06 : 0;
+  const hwp = [fw[0] + hx * B.hf, fw[1] + hy * B.hf], hp = Pj(hwp[0], hwp[1], B.head + low + snap, bob + drop);
+  if (c.kind === 'deer' || c.kind === 'fox') { const n0 = Pj(fw[0], fw[1], B.hip + B.hb * 1.5); line(n0[0], n0[1], hp[0], hp[1], body, c.kind === 'deer' ? 1.1 : 0.8); }
+  const px_ = -hy, py_ = hx, side = (k, h) => Pj(hwp[0] + px_ * k - hx * 0.03, hwp[1] + py_ * k - hy * 0.03, B.head + low + snap + h, bob + drop);
+  if (c.kind === 'rabbit') { const fl = prep && pf >= 4 ? 0.05 : 0.15; for (const sg of [-1, 1]) { const e = side(sg * 0.025, fl + (c.ear > 2 && sg > 0 ? -0.06 : 0)); const b0 = side(sg * 0.02, 0.02); line(b0[0], b0[1], e[0], e[1], dark, 0); } }
+  disc(hp[0], hp[1], B.hr + 0.8, OUTL); disc(hp[0], hp[1], B.hr, c.kind === 'raccoon' ? pc[2] : body);
+  if (c.kind === 'raccoon') { const m0 = side(-0.05, 0), m1 = side(0.05, 0); line(m0[0], m0[1], m1[0], m1[1], pc[3], 0); if (c.mode === 'idle' && c.dab > 0) { const pw = Pj(fw[0] + fx * (0.06 + (c.dab % 2) * 0.05), fw[1] + fy * (0.06 + (c.dab % 2) * 0.05), 0); line(pw[0], pw[1], pw[0], pw[1], pc[3], 0); } }
+  if (c.kind === 'fox') { const sn = Pj(hwp[0] + hx * 0.12, hwp[1] + hy * 0.12, B.head - 0.03, bob + drop); line(hp[0], hp[1], sn[0], sn[1], body, 0); line(sn[0], sn[1], sn[0], sn[1], pc[3], 0); for (const sg of [-1, 1]) { const e = side(sg * 0.05, 0.1); line(e[0], e[1], e[0], e[1], dark, 0); } }
+  if (c.kind === 'deer') { const sn = Pj(hwp[0] + hx * 0.16, hwp[1] + hy * 0.16, B.head - 0.08, bob); line(hp[0], hp[1], sn[0], sn[1], body, 0.7); for (const sg of [-1, 1]) { const e = side(sg * 0.09, 0.12), b0 = side(sg * 0.04, 0.03); line(b0[0], b0[1], e[0], e[1], dark, 0); } }
+  legs(false);
+  c.eyeS = [hp[0], hp[1], ha];
+}
+function drawOwl() { // flies 1.5 m up: three flaps, then a long glide held at full spread
+  const [sx0, sy0] = s2(owl.x, owl.y); if (!onScr(sx0, sy0, 20)) return;
+  const [lx, ly] = leanV(sx0, sy0, 1), LL = Math.hypot(lx, ly) || 1, f = Math.floor(owl.t * 30), cyc = f % 42, flap = cyc < 18;
+  const SP = [6, 6, 4, 2, 2, 4], span = flap ? SP[cyc % 6] : 6, back = flap ? 0 : 1, hgt = 1.5 * 12.5 + (flap ? Math.floor(cyc / 6) : 3 - Math.floor((cyc - 18) / 8));
+  const sx = Math.floor(sx0 + lx / LL * hgt) + 0.5, sy = Math.floor(sy0 + ly / LL * hgt) + 0.5, L = Math.hypot(owl.vx, owl.vy) || 1, ux = owl.vx / L, uy = owl.vy / L, px = -uy, py = ux;
+  for (const sg of [-1, 1]) line(sx, sy, Math.floor(sx + px * span * sg - ux * back) + 0.5, Math.floor(sy + py * span * sg - uy * back) + 0.5, PAL.owl, 0.7);
+  ell(sx, sy, Math.atan2(uy, ux), 1.6, 1.1, () => PAL.owl); disc(sx + ux * 1.6, sy + uy * 1.6, 1, PAL.owl);
+}
 function spawnCritter(loud = false) {
   const kinds = ['raccoon', 'raccoon', 'rabbit', 'rabbit', 'fox'], kind = kinds[R() * kinds.length | 0];
   const a = (loud ? beam.aim + Math.PI * (0.5 + R()) : P.moving ? P.face : beam.aim) + (R() - 0.5) * 1.8, dd = loud ? 8 + R() * 4 : 9 + R() * 8;
@@ -1014,22 +1139,20 @@ function updateCritters(dt) {
     if (!owl && R() < 0.3) startOwl();
   }
   for (const c of critters) {
-    c.t += dt; const k = CRIT[c.kind], d = Math.hypot(c.x - P.x, c.y - P.y);
-    if (c.st === 'idle') {
-      if (beamAt(c.x, c.y, 1.4) > 0.05) c.litT += dt;
-      if (c.kind === 'fox') c.a += clamp(wrapA(Math.atan2(P.y - c.y, P.x - c.x) - c.a), -2 * dt, 2 * dt); // it watches you
-      else if (c.kind === 'raccoon') c.a += Math.sin(c.t * 1.3) * dt * 0.9;                            // rummaging
-      if (c.loud && c.t > c.nextSnd && d < 22) { c.nextSnd = c.t + 2 + R() * 4; if (c.kind === 'raccoon') snd.chitter(c.x, c.y); else snd.rustle(c.x, c.y, 0.2); }
-      if (d < k.flee || (P.mode === 'run' && d < k.flee * 2) || c.litT > (c.kind === 'rabbit' ? 1 : 2.5) || c.t > 45) {
-        c.st = 'flee'; c.t = 0;
-        if (c.loud) { snd.rustle(c.x, c.y, 0.45); fear = Math.max(fear, 0.3); }
-        if (!c.loud) {} else if (c.kind === 'rabbit') snd.thump(c.x, c.y); else if (c.kind === 'fox' && R() < 0.6) snd.bark(c.x, c.y);
-      }
-    } else {
-      const zig = c.kind === 'rabbit' ? Math.sin(c.t * 9) * 0.9 : 0, fa = Math.atan2(c.y - P.y, c.x - P.x) + zig;
-      moveTo(c, c.x + Math.cos(fa) * 3, c.y + Math.sin(fa) * 3, k.sp, dt);
-      if (c.loud && R() < dt * 4) snd.rustle(c.x, c.y, 0.25);
-      if (d > 30 || c.t > 6) c.dead = true;
+    const k = CRIT[c.kind], B = BEAST[c.kind]; if (!c.feet) beastInit(c, c.kind, c.st === 'flee');
+    c.acc += dt;
+    while (c.acc >= 1 / 30) { c.acc -= 1 / 30; c.t += 1 / 30; const d = Math.hypot(c.x - P.x, c.y - P.y);
+      let go = false;
+      if (c.st === 'idle') {
+        if (beamAt(c.x, c.y, 1.4) > 0.05) c.litT += 1 / 30;
+        if (c.loud && c.t > c.nextSnd && d < 22) { c.nextSnd = c.t + 2 + R() * 4; if (c.kind === 'raccoon') snd.chitter(c.x, c.y); else snd.rustle(c.x, c.y, 0.2); }
+        if (d < k.flee || (P.mode === 'run' && d < k.flee * 2) || c.litT > (c.kind === 'rabbit' ? 1 : 2.5) || c.t > 45) {
+          c.st = 'flee'; c.t = 0;
+          if (c.loud) { snd.rustle(c.x, c.y, 0.45); fear = Math.max(fear, 0.3); }
+          if (!c.loud) {} else if (c.kind === 'rabbit') snd.thump(c.x, c.y); else if (c.kind === 'fox' && R() < 0.6) snd.bark(c.x, c.y);
+        }
+      } else { go = true; if (c.loud && R() < 4 / 30) snd.rustle(c.x, c.y, 0.25); if (d > 30 || c.t > 6) c.dead = true; }
+      beastFrame(c, B, go);
     }
   }
   critters = critters.filter(c => !c.dead && Math.hypot(c.x - P.x, c.y - P.y) < 45);
@@ -1304,7 +1427,7 @@ function falseAlarm() {
     const p = darkSpot(11 + R() * 4); if (!p) return;
     snd.twig(p[0], p[1], 1.3); fear = Math.max(fear, 0.45);
     const a = Math.atan2(p[1] - P.y, p[0] - P.x);
-    Object.assign(DEER, { on: true, x: p[0], y: p[1], a, st: 'flee', t: 0, litT: 0, stepT: 0, quiet: false });
+    Object.assign(DEER, { on: true, x: p[0], y: p[1], a, st: 'flee', t: 0, litT: 0, stepT: 0, quiet: false, feet: null });
     setTimeout(() => { if (DEER.on) snd.deer(DEER.x, DEER.y); }, 250);
   } else if (r < 0.8) spawnCritter(true);
   else { const a = R() * TAU; snd.owl(P.x + Math.cos(a) * 9, P.y + Math.sin(a) * 9); }
@@ -1813,7 +1936,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   const H0 = PAL.hide[0], H1 = PAL.hide[1], shadow = !!o.shadow, trem = o.trem || 0;
   const Qt = j => { const r = Q(j); return [r[0] + trem, r[1]]; };
   const ln = (a, b, w, col, q = Q) => { const A = q(a), B = q(b); line(A[0], A[1], B[0], B[1], col, w); };
-  const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L']; ln(L.Hp, L.K, 1.0, col); ln(L.K, L.A, 0.7, col); ln(L.A, L.T, 0, col); ln(L.T, [L.T[0], L.T[1], L.T[2] + 0.1], 0, col); }; // feet end in a flat pad, hands in claws
+  const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L'], ka = Q(L.K), aa = Q(L.A), vert = Math.abs(aa[0] - ka[0]) < Math.abs(aa[1] - ka[1]) * 0.36; ln(L.Hp, L.K, 1.0, col); ln(L.K, L.A, vert ? 0 : 0.7, col); /* (Noah v12) a near-vertical shin at r 0.7 alternates 1 and 2 px: a ladder */ ln(L.A, L.T, 0, col); ln(L.T, [L.T[0], L.T[1], L.T[2] + 0.1], 0, col); }; // feet end in a flat pad, hands in claws
   const arm = (s, col) => {
     const L = J[s > 0 ? 'R' : 'L'], q = o.shield === s ? Qt : Q;
     ln(L.Sh, L.E, 1.0, col, q); hand(s, col, q);
@@ -1941,7 +2064,7 @@ function drawCreature(dt = 1 / 30) {
       const Qs = j => { const r = Qsr(j); return [Math.floor(r[0]) + 0.5, Math.floor(r[1]) + 0.5]; };
       MASK = SHB; MV = 0.6; crDraw(Qs, Qsr, J, ant, ka, nearSide, { shadow: true }); MASK = null;
       const Lm = 2.6 * k, x0 = Math.max(0, Math.floor(sx - Lm - 8)), x1 = Math.min(W - 1, Math.ceil(sx + Lm + 8)), y0 = Math.max(0, Math.floor(sy - Lm - 8)), y1 = Math.min(H - 1, Math.ceil(sy + Lm + 8));
-      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * W + x; if (SHB[i] < 1 && ((x + y) & 1) && ((x + 0.5 - sx) * bx + (y + 0.5 - sy) * by) / Lm > 0.6) SHB[i] = 1; } // checker-dither the far end
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * W + x, q = ((x + 0.5 - sx) * bx + (y + 0.5 - sy) * by) / Lm; if (SHB[i] < 1 && q > 0.6) SHB[i] += (1 - SHB[i]) * Math.min(1, (q - 0.6) / 0.4); } // (Noah v12) the far end fades out evenly: a checker dither on thin legs read as a striped line on the ground
       for (let y = Math.floor(sy) - 1; y <= sy + 1; y++) for (let x = Math.floor(sx) - 2; x <= sx + 2; x++) if (x >= 0 && y >= 0 && x < W && y < H) SHB[y * W + x] = 1; // a pixel of ground between feet and shadow
     }
     // contact shadow: always, under its feet, with a darker core
@@ -1978,40 +2101,10 @@ function drawCreature(dt = 1 / 30) {
   CR.eyeP = eyes; CR.eyeS = G;
 }
 function drawCritters() {
-  for (const c of critters) {
-    const [sx, sy] = s2(c.x, c.y); if (!onScr(sx, sy, 10)) continue;
-    const a = c.a, ca = Math.cos(a), sa = Math.sin(a), k = PPM * 1.6, run = c.st === 'flee' ? Math.sin(c.t * 22) * 0.9 : 0; // drawn a bit larger than life so they read
-    if (c.kind === 'raccoon') {
-      for (let i = 0; i < 4; i++) disc(sx - ca * (0.24 + i * 0.07) * k + sa * run * 0.3, sy - sa * (0.24 + i * 0.07) * k - ca * run * 0.3, 1.1, i % 2 ? PAL.coon[3] : PAL.coon[2]);
-      ell(sx, sy, a, 0.22 * k, 0.12 * k, (u, v, q) => q > 0.7 ? PAL.coon[1] : PAL.coon[0]);
-      const hx = sx + ca * 0.24 * k, hy = sy + sa * 0.24 * k; disc(hx, hy, 1.6, PAL.coon[2]); line(hx - sa * 1.2, hy + ca * 1.2, hx + sa * 1.2, hy - ca * 1.2, PAL.coon[3]);
-    } else if (c.kind === 'rabbit') {
-      ell(sx, sy, a, 0.13 * k, 0.08 * k, (u, v, q) => q > 0.7 ? PAL.rabbit[1] : PAL.rabbit[0]);
-      const hx = sx + ca * 0.12 * k, hy = sy + sa * 0.12 * k; disc(hx, hy, 1.2, PAL.rabbit[0]);
-      for (const sg of [-1, 1]) line(hx, hy, hx - ca * 1.8 + sa * sg * 0.7, hy - sa * 1.8 - ca * sg * 0.7, PAL.rabbit[1]);
-      const tx = sx - ca * 0.13 * k, ty = sy - sa * 0.13 * k; if (tx >= 0 && ty >= 0 && tx < W && ty < H) ob[(ty | 0) * W + (tx | 0)] = PAL.rabbit[2];
-    } else {
-      for (let i = 0; i < 4; i++) disc(sx - ca * (0.26 + i * 0.09) * k + sa * run * 0.4, sy - sa * (0.26 + i * 0.09) * k - ca * run * 0.4, 1.5 - i * 0.15, i === 3 ? PAL.fox[2] : PAL.fox[0]);
-      ell(sx, sy, a, 0.25 * k, 0.09 * k, (u, v, q) => q > 0.7 ? PAL.fox[1] : PAL.fox[0]);
-      const hx = sx + ca * 0.27 * k, hy = sy + sa * 0.27 * k; disc(hx, hy, 1.5, PAL.fox[0]); line(hx, hy, hx + ca * 1.8, hy + sa * 1.8, PAL.fox[2]);
-      for (const sg of [-1, 1]) { const ex = hx - ca * 0.6 + sa * sg * 1.0, ey = hy - sa * 0.6 - ca * sg * 1.0; if (ex >= 0 && ey >= 0 && ex < W && ey < H) ob[(ey | 0) * W + (ex | 0)] = PAL.fox[3]; }
-    }
-  }
-  if (owl) { // a dark shape with beating wings, gone in a few seconds
-    const [sx, sy] = s2(owl.x, owl.y); if (onScr(sx, sy, 12)) { const L = Math.hypot(owl.vx, owl.vy) || 1, px = -owl.vy / L, py = owl.vx / L, w = 5 + Math.sin(owl.t * 16) * 2.5; for (const sg of [-1, 1]) line(sx, sy, sx + px * w * sg - owl.vx / L * 1.5, sy + py * w * sg - owl.vy / L * 1.5, PAL.owl, 0.7); disc(sx, sy, 1.3, PAL.owl); }
-  }
+  for (const c of critters) drawBeast(c);
+  if (owl) drawOwl();
 }
-function drawDeer() {
-  if (!DEER.on) return;
-  const [sx, sy] = s2(DEER.x, DEER.y); if (!onScr(sx, sy, 14)) return;
-  const k = PPM, a = DEER.a, ca = Math.cos(a), sa = Math.sin(a);
-  ell(sx, sy, a, 0.68 * k, 0.24 * k, (u, v, q) => q > 0.75 ? PAL.deer[1] : PAL.deer[0]);
-  const nx = sx + ca * 0.62 * k, ny = sy + sa * 0.62 * k, hx = sx + ca * 0.88 * k, hy = sy + sa * 0.88 * k;
-  line(nx, ny, hx, hy, PAL.deer[0], 1);
-  disc(hx, hy, 0.11 * k, PAL.deer[0]);
-  for (const sg of [-1, 1]) line(hx, hy, hx - ca * 0.12 * k - sa * sg * 0.14 * k, hy - sa * 0.12 * k + ca * sg * 0.14 * k, PAL.deer[1]);
-  disc(sx - ca * 0.68 * k, sy - sa * 0.68 * k, 0.07 * k, PAL.deer[2]);
-}
+function drawDeer() { if (DEER.on) drawBeast(DEER); }
 function drawPlayer() {
   const [sx, sy] = s2(P.x, P.y), k = PPM, a = P.aim, ca = Math.cos(a), sa = Math.sin(a);
   line(sx + ca * 0.1 * k - sa * 0.14 * k, sy + sa * 0.1 * k + ca * 0.14 * k, sx + ca * 0.42 * k, sy + sa * 0.42 * k, PAL.hand);
@@ -2306,16 +2399,11 @@ function overlays() {
       px1(ex, ey, c[0], c[1], c[2], v); if (red) for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) px1(ex + ox, ey + oy, c[0], c[1], c[2], 1);
     }
   }
-  for (const c of critters) { // small animals' eyes: low, close-set, green or red
-    const L = CRIT[c.kind].len * 0.95, hx = c.x + Math.cos(c.a) * L, hy = c.y + Math.sin(c.a) * L;
-    const face = Math.cos(wrapA(Math.atan2(P.y - c.y, P.x - c.x) - c.a)), I = beamAt(hx, hy, 3) * 2.6 * sstep(0.3, 0.8, face);
-    if (I > 0.04) eyes(hx, hy, c.a, 0.8, c.kind === 'rabbit' ? [255, 150, 120] : c.kind === 'fox' ? [255, 230, 140] : [200, 255, 150], I);
-  }
-  if (DEER.on) {
-    const hx = DEER.x + Math.cos(DEER.a) * 0.92, hy = DEER.y + Math.sin(DEER.a) * 0.92;
-    const face = Math.cos(wrapA(Math.atan2(P.y - DEER.y, P.x - DEER.x) - DEER.a));
-    const I = beamAt(hx, hy, 3.2) * 2.6 * sstep(0.35, 0.8, face);
-    if (I > 0.04) eyes(hx, hy, DEER.a, 0.07 * PPM, [232, 255, 220], I);
+  const eyesS = (sx, sy, a, sep, col, I) => { const ca = Math.cos(a), sa = Math.sin(a); for (const sg of [-1, 1]) px1(Math.floor(sx - sa * sep * sg), Math.floor(sy + ca * sep * sg), col[0], col[1], col[2], clamp(I, 0, 1)); };
+  for (const c of [...critters, ...(DEER.on ? [DEER] : [])]) { // animals' eyes, on their heads: low and close-set, green, red or pale
+    if (!c.eyeS) continue; const L = BEAST[c.kind].len / 2 + BEAST[c.kind].hf, hx = c.x + Math.cos(c.a) * L, hy = c.y + Math.sin(c.a) * L, deer = c.kind === 'deer';
+    const face = Math.cos(wrapA(Math.atan2(P.y - c.y, P.x - c.x) - c.eyeS[2])), I = beamAt(hx, hy, deer ? 3.2 : 3) * 2.6 * sstep(deer ? 0.35 : 0.3, 0.8, face);
+    if (I > 0.04) eyesS(c.eyeS[0], c.eyeS[1], c.eyeS[2], deer ? 1 : 0.8, c.kind === 'rabbit' ? [255, 150, 120] : c.kind === 'fox' ? [255, 230, 140] : deer ? [232, 255, 220] : [200, 255, 150], I);
   }
   // rims on the creature: edges facing your light catch a dim warm rim; top edges catch a little sky where it's already
   // visible. Only on thick parts (3+ px deep: torso, head, shoulders), only runs of 2+ pixels, and recomputed only when
