@@ -174,7 +174,7 @@ const PAL = {
   rock: ['#86837b', '#6f6c65', '#55534d'].map(C), fern: ['#4f6b33', '#5f7c3a', '#3e5628'].map(C),
   bush: ['#3d5a2c', '#4a6833', '#2f4622', '#55703a'].map(C),
   stump: ['#a39c8e', '#8a8477', '#6a655b'].map(C),
-  hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#211d18'), hornHi: C('#3a342a'), tooth: ['#b3a684', '#d8ceb0'].map(C), toothDk: C('#7d7259'), claw: C('#35302a'), glint2: C('#f4efe0'), mouth: C('#040303'),
+  hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#211d18'), hornHi: C('#3a342a'), tooth: ['#b3a684', '#d8ceb0'].map(C), toothDk: C('#988c6e'), claw: C('#35302a'), glint2: C('#f4efe0'), mouth: C('#040303'),
   deer: ['#7d5b3c', '#6a4b30', '#d8cdb8'].map(C), jacket: C('#3f4a5c'), hair: C('#3a2a20'), hand: C('#c9a98a'), torch: C('#d0d0cc'),
   camper: [C('#b8503a'), C('#5a2418'), C('#d9b08c'), C('#262422'), C('#e0d6c0')],
   tent: ['#4f6a52', '#3c5440', '#6b8a6c'].map(C), car: ['#6a4a3c', '#53392e', '#1d2227', '#a8b0b8'].map(C), refl: C('#cfe6f2'),
@@ -1862,7 +1862,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
     }
   }
   if (!shadow) for (const s of [1, -1]) if (J.p[s > 0 ? 'roR' : 'roL']) hand(s, H0); // at full reach the hand comes over the body
-  // antlers: they ride on a spring behind the head, so they arrive late and overshoot
+  // antlers: rigid on the skull
   const at = ant.t * Math.PI / 180, ca = Math.cos(at), sa = Math.sin(at);
   // (notes v7) each beam is real 3D geometry: out to the side, rising a little, and sweeping BACK, so it still reads as
   // antlers side-on instead of collapsing into one stick. Low and wide from the front, as designed.
@@ -1906,13 +1906,13 @@ function drawCreature(dt = 1 / 30) {
     let p = target;
     if (CR.from) { CR.bT += stepN; const t = sstep(0, 4, CR.bT); p = lerpPose(CR.from, target, t); if (t >= 1) CR.from = null; }
     CR.pose = p; CR.pq = q;
-    // antler spring: lag 2-3 frames behind the head, overshoot a pixel when it stops hard
+    // antlers follow the head exactly
     const tgt = CR.pose.hd, tt = CR.pose.tilt, sw = CR.anim === 'run' || CR.anim === 'lunge' || CR.anim === 'flinch' ? 0.3 : 0;
     if (!CR.ant || CR.freeze) CR.ant = { p: tgt.slice(), v: [0, 0, 0], t: tt, tv: 0, sw }; // nothing moves after the strike lands
-    else { const A = CR.ant; for (let i = 0; i < 3; i++) { A.v[i] = (A.v[i] + (tgt[i] - A.p[i]) * 0.55) * 0.5; A.p[i] += A.v[i] * (stepN > 1 ? 1.4 : 1); } A.tv = (A.tv + (tt - A.t) * 0.55) * 0.5; A.t += A.tv; A.sw += (sw - A.sw) * 0.5; }
+    else { const A = CR.ant; A.p = tgt.slice(); A.t = tt; A.sw += (sw - A.sw) * 0.5; } // (Noah v11) antlers are bone: locked to the skull, no lag
   }
   { const [qx, qy] = s2(CR.x, CR.y), [lx, ly] = leanV(qx, qy, 1), ll = Math.hypot(lx, ly) || 1, c = (Math.cos(CR.a) * lx + Math.sin(CR.a) * ly) / ll; CR.viewSide = mode === 'dying' ? 0 : Math.sqrt(Math.max(0, 1 - c * c)); }
-  const J = crJoints(CR.pose), ant = { p: [CR.ant.p[0] + CR.pose.ux, CR.ant.p[1], CR.ant.p[2]], t: CR.ant.t * 1.5, sw: CR.ant.sw };
+  const J = crJoints(CR.pose), ant = { p: [CR.ant.p[0] + CR.pose.ux, CR.ant.p[1], CR.ant.p[2]], t: CR.ant.t, sw: CR.ant.sw };
   { const [qx, qy] = s2(CR.x, CR.y), [lx, ly] = leanV(qx, qy, 1), ll = Math.hypot(lx, ly) || 1, fc = Math.abs((Math.cos(CR.a) * lx + Math.sin(CR.a) * ly) / ll); if (mode !== 'dying') ant.sw = Math.max(ant.sw, 0.85 * sstep(0.3, 0.8, 1 - fc)); } // side-on, the antlers sweep back so they don't collapse into a stick
   let [sx, sy] = s2(CR.x, CR.y), G, SH, fx, fy, rx, ry, ux, uy;
   const sc = CR.pose.sc || 1;
