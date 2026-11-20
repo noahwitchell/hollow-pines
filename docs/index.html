@@ -1815,13 +1815,15 @@ function crAnim() {
   if (mode === 'dying') { CR.anim = 'dying'; return [CPOSE.strike, 1]; }
   if (CR.st === 'strike' && S.stk) {
     const k = S.stk;
-    if (k.ph !== 1) { CR.anim = 'tower'; const p = copyPose(CPOSE.tower); if ((fc % 96) >= 20 && (fc % 96) < 62) { p.sh = [p.sh[0] + 0.1, p.sh[1]]; p.hd = [p.hd[0], p.hd[1] + 0.1, p.hd[2]]; } return [p, 3]; }
+    // (Noah v12) it waits behind you already coiled to attack: the hunched lean, claws out, never still
+    if (k.ph !== 1) { CR.anim = 'tower'; k.lp = null; return [leanIdle(fc), 2]; }
     const F = Math.floor(k.t * 30); CR.anim = 'reveal';
+    if (!k.lp) { k.lp = leanIdle(fc); k.ls = copyPose(k.lp); k.ls.tilt = k.lp.tilt > 0 ? -22 : 22; k.ls.et = k.ls.tilt > 0 ? 1 : -1; k.ls.hd = [k.lp.hd[0], k.lp.hd[1] + 0.06, k.lp.hd[2]]; } // caught mid-breath; then the head snaps
     if (F <= 0) CR.eyeK = 0.45; // a slit, then the eyes are open
-    if (F < 6) return [CPOSE.tower, 1];
-    if (F < 8) return [CPOSE.tower2, 1];
+    if (F < 6) return [k.lp, 1];
+    if (F < 8) return [k.ls, 1];
     // (Noah v12) bigger: from the head snap it rears up and spreads (F8-13, fast out, slow in), holds there trembling (F14-19), then lunges in
-    if (F < 14) { const u = (F - 7) / 6, e = 1 - (1 - u) ** 3; return [lerpPose(CPOSE.tower2, CPOSE.spread, e), 1]; }
+    if (F < 14) { const u = (F - 7) / 6, e = 1 - (1 - u) ** 3; return [lerpPose(k.ls, CPOSE.spread, e), 1]; }
     if (F < 20) { const p = copyPose(CPOSE.spread), q = (F & 1) ? 1 : -1, g = (F - 14) / 6; p.wR = [p.wR[0] + 0.03 * q, p.wR[1] + 0.06 * g, p.wR[2]]; p.wL = [p.wL[0] - 0.03 * q, p.wL[1] + 0.06 * g, p.wL[2]]; p.hd = [p.hd[0], p.hd[1] + 0.03 * g, p.hd[2] - 0.04 * g]; p.sc = 1.08 + 0.02 * g; return [p, 1]; }
     if (F === 20) { CR.smear = true; shake = Math.max(shake, 0.45); }
     CR.freeze = true; return [CPOSE.strike, 1];
