@@ -59,7 +59,16 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
 #hp.hit{animation:hpHit .9s steps(6)}
 @keyframes hpHit{0%,32%,66%{filter:brightness(2.2)}16%,50%,100%{filter:none}}
 #note{position:absolute;left:50%;top:calc(var(--st) + 16px);transform:translateX(-50%);width:min(560px,calc(100% - var(--sl) - var(--sr) - 120px));box-sizing:border-box;padding:6px 14px 8px;background:rgba(4,5,8,.72);border:2px solid var(--line);font-size:20px;line-height:1.15;color:var(--ink);text-align:center;text-wrap:balance;pointer-events:none;transition:opacity .8s;z-index:6}
-@media (prefers-reduced-motion: reduce){.hint,#hp,#note{transition:none}#hp.hit{animation:none}}
+#pick{position:absolute;transform:translate(-50%,-50%);padding:6px 14px 7px;font-size:20px;letter-spacing:.06em;color:var(--beam);background:rgba(4,5,8,.78);border:2px solid #5b5440;z-index:8;white-space:nowrap;animation:pickIn .35s ease-out}
+#pick::after{content:' \25B8';color:var(--dim)}
+@keyframes pickIn{from{opacity:0;transform:translate(-50%,-30%)}to{opacity:1;transform:translate(-50%,-50%)}}
+#read{position:absolute;inset:0;display:grid;place-items:center;background:rgba(2,2,4,.78);z-index:16;padding:var(--st) var(--sr) var(--sb) var(--sl);cursor:pointer}
+#read .rb{width:min(560px,100%);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+#readCv{width:min(320px,52vh);aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;border:2px solid var(--line)}
+#read h3{margin:0;font-weight:400;font-size:22px;letter-spacing:.12em;color:var(--ember);text-transform:uppercase}
+#read #readP p{margin:0 0 6px;font-size:21px;line-height:1.15;color:var(--ink);text-wrap:balance}
+#read span{font-size:15px;color:var(--dim);letter-spacing:.1em}
+@media (prefers-reduced-motion: reduce){.hint,#hp,#note{transition:none}#hp.hit{animation:none}#pick{animation:none}}
 </style>
 <div id="app">
   <canvas id="cv"></canvas>
@@ -72,6 +81,8 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   <div id="talk" hidden><b id="talkWho"></b><p id="talkText"></p><span>TAP</span></div>
   <div id="hp" hidden><i></i></div>
   <div id="note" hidden></div>
+  <button id="pick" hidden></button>
+  <div id="read" hidden><div class="rb"><canvas id="readCv" width="128" height="72"></canvas><h3 id="readT"></h3><div id="readP"></div><span>TAP TO PUT IT AWAY</span></div></div>
   <button id="pauseBtn" aria-label="Pause" hidden>II</button>
   <div id="rbtns" hidden>
     <button id="focusBtn" aria-label="Beam focus">WIDE</button>
