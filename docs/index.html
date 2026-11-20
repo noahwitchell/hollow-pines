@@ -1691,24 +1691,28 @@ function recoilPose(ls) { // caught in the light: upper body snaps away, light-s
   shieldArm(p, ls); if (ls > 0) { p.wL = [-0.55, 0.9, -0.2]; p.cL = 1.2; } else { p.wR = [0.55, 0.9, -0.2]; p.cR = 1.2; }
   return p;
 }
-// (notes v5 §1) the menacing idle: leaning toward you, the hands take turns reaching out, claws opening, half-closing,
-// then snapping shut on nothing. Never in sync. Holds vary; one cycle in three it leans in a pixel.
-const REACH_A = [[0, 0], [20, 0], [38, 1], [52, 1], [64, 0], [120, 0]], REACH_B = [[0, 0], [56, 0], [74, 1], [86, 1], [98, 0], [120, 0]];
-const CLAW_A = [[0, 0.3], [20, 0.3], [34, 1.1], [44, 1.1], [50, 0.6], [57, 0.6], [58, -0.25], [64, 0.3], [120, 0.3]], CLAW_B = [[0, 0.3], [56, 0.3], [70, 1.1], [80, 1.1], [86, 0.6], [91, 0.6], [92, -0.25], [98, 0.3], [120, 0.3]];
+// (Noah, v11) the menacing idle is never still: one constant loop. Both arms bent out in front of it; they sink and hunch
+// down together (the far one a beat late), then come back up with the claws opening. The head, pushed out on the neck,
+// rolls in a slow circle in place, upright, bobbing low as the arms sink. Loop = 84 frames (2.8 s); every part is offset.
+const IDLE_LOOP = 84;
 function leanIdle(fc) {
-  if (!CR.ic || fc - CR.ic.t0 >= CR.ic.len) { const k = 0.75 + R() * 0.55; CR.ic = { t0: fc, k, len: 120 * k, side: R() < 0.5 ? 1 : -1, lean: R() < 0.34 }; }
-  const ic = CR.ic, t = (fc - ic.t0) / ic.k, p = copyPose(CPOSE.lean);
-  const rA = track(REACH_A, t), rB = track(REACH_B, t);
-  // a reach arcs out to the side first, then curls in toward you: from above it reads by sideways travel and overlap, not depth
-  const reachW = (r, s, rest) => r < 0.45 ? lv3(rest, [s * 0.8, 1.2, 0.4], sstep(0, 0.45, r)) : lv3([s * 0.8, 1.2, 0.4], [s * 0.45, 1.1, 1.1], sstep(0.45, 1, r));
-  p.eR = null; p.wR = reachW(rA, 1, [0.36, 0.95, 0.55]); p.cR = track(CLAW_A, t) * (rA > 0.5 ? 1.15 : 1); p.wmR = rA > 0.5 ? 1 : 0; p.roR = rA > 0.8;
-  if (rB < 0.3) p.poleL = [-0.3, 0, -1]; if (rA < 0.3) p.poleR = [0.3, 0, -1]; // the arm that isn't reaching stays tight to the ribs, so the two never mirror
-  p.eL = null; p.wL = reachW(rB, -1, [-0.36, 0.95, 0.55]); p.cL = track(CLAW_B, t) * (rB > 0.5 ? 1.15 : 1); p.wmL = rB > 0.5 ? 1 : 0; p.roL = rB > 0.8;
-  const s6 = Math.max(track(REACH_A, t - 6), track(REACH_B, t - 6)), h4 = track(REACH_A, t - 4) - track(REACH_B, t - 4);
-  p.sh = [p.sh[0], p.sh[1] + 0.1 * s6]; p.hd = [p.hd[0] + 0.1 * h4, p.hd[1] - 0.15 * s6, p.hd[2] + 0.06 * s6]; // head drops as it leans into the reach // shoulders follow the hand, the head turns toward it, both a little late
-  if (ic.lean && t < 30) p.uf = 0.08; // leans in
-  if (Math.max(rA, rB) > 0.6) p.jaw = 0.05; // the jaw cracks open as it reaches
-  return ic.side > 0 ? p : mirPose(p);
+  if (CR.ic == null) CR.ic = { ph: R(), sd: R() < 0.5 ? 1 : -1 };
+  const TAU = Math.PI * 2, u = fc / IDLE_LOOP + CR.ic.ph, th = u * TAU;
+  const sink = (k) => 0.5 - 0.5 * Math.cos(th - k * TAU); // 0 = arms up, 1 = sunk and hunched
+  const dR = sink(0), dL = sink(0.12), dB = sink(0.06), p = copyPose(CPOSE.lean);
+  // arms: bent forward, elbows out, hands drop and pull in a little as they sink
+  p.wR = lv3([0.4, 1.2, 0.9], [0.36, 0.78, 0.72], dR); p.eR = lv3([0.62, 1.42, 0.5], [0.6, 1.12, 0.36], dR);
+  p.wL = lv3([-0.42, 1.15, 0.86], [-0.38, 0.76, 0.68], dL); p.eL = lv3([-0.62, 1.4, 0.46], [-0.6, 1.1, 0.34], dL);
+  p.cR = 1.1 - 0.85 * dR; p.cL = 1.1 - 0.85 * dL; // claws spread as the hands rise, curl as they sink
+  p.wmR = p.wmL = 1; p.wb = 30 + 15 * dB;
+  // the body hunches with the arms: shoulders down and forward
+  p.sh = [p.sh[0] - 0.14 * dB, p.sh[1] + 0.1 * dB]; p.uf = 0.03 + 0.06 * dB;
+  // head: pushed out, circling in place on the neck, low as the body hunches
+  const hx = 0.15 * Math.sin(th * 1 + 0.6), hf = 0.08 * Math.cos(th + 0.6);
+  p.hd = [p.hd[0] + hx, p.hd[1] - 0.12 * sink(0.1) + 0.03, p.hd[2] + 0.06 + hf];
+  p.tilt = 14 * Math.sin(th + 0.3);
+  p.jaw = dB > 0.75 ? 0.05 : 0; // jaw cracks at the bottom of the hunch
+  return CR.ic.sd > 0 ? p : mirPose(p);
 }
 // which way its light side is: +1 = the beam is on its right
 function lightSide() { const dx = P.x - CR.x, dy = P.y - CR.y; return (dx * -Math.sin(CR.a) + dy * Math.cos(CR.a)) >= 0 ? 1 : -1; }
@@ -1772,6 +1776,7 @@ function crAnim() {
     else if (tw.k === 'listen') { if (t > 30) CR.tw = null; else { p.hd = [p.hd[0] + tw.toP * 0.08, p.hd[1], p.hd[2]]; if (t > 6 && t < 18) CR.eyeK = 0.45; } }
     if (!CR.tw) CR.twNext = fc + 75 + R() * 105;
   }
+  if (!stoop) return [p, 2]; // the lean loop carries its own breath
   if ((fc % 96) >= 20 && (fc % 96) < 62) { p.sh = [p.sh[0] + 0.1, p.sh[1]]; p.hd = [p.hd[0], p.hd[1] + 0.1, p.hd[2]]; if (CR.eyeK === 1) CR.eyeK = 1.25; } // inhale: chest and head up a pixel, eyes a shade brighter
   return [p, 3];
 }
@@ -1962,7 +1967,8 @@ function drawCreature(dt = 1 / 30) {
   if (!dying && CR.pose.jaw < 0.1 && off < 55) { // teeth: a short horizontal row one pixel under the eyes, nudged toward where it faces
     const open = CR.pose.jaw > 0.03, ty = Math.floor(my + 2) + (open ? 1 : 0), tx = Math.floor(mx + (off >= 30 ? Math.sign(fx || 1) : 0)), wdt = off < 30 ? 2 : 1; OV = [CR.x, CR.y];
     if (open) for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx, y = ty - 1; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.mouth); } // the jaw drops: a dark gap, the row a pixel lower
-    for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; for (let k = 0; k < ((dx & 1) ? 2 : 1); k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } // jagged: teeth of uneven length, wider than the eyes
+    if (window.HP_FANGS) { for (const dx of [-1, 1]) { const x = tx + dx; for (let k = 0; k < 2; k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } } // test: two 2 px fangs, a gap between
+    else for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; for (let k = 0; k < ((dx & 1) ? 2 : 1); k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } // jagged: teeth of uneven length, wider than the eyes
     OV = null;
   }
   CR.eyeP = eyes; CR.eyeS = G;
