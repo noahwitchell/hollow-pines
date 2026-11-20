@@ -66,7 +66,7 @@ const PAL = {
   rock: ['#86837b', '#6f6c65', '#55534d'].map(C), fern: ['#4f6b33', '#5f7c3a', '#3e5628'].map(C),
   bush: ['#3d5a2c', '#4a6833', '#2f4622', '#55703a'].map(C),
   stump: ['#a39c8e', '#8a8477', '#6a655b'].map(C),
-  hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#211d18'), hornHi: C('#3a342a'), tooth: ['#b3a684', '#d8ceb0'].map(C), claw: C('#35302a'), glint2: C('#f4efe0'), mouth: C('#040303'),
+  hide: ['#15130f', '#2b2620', '#40382d'].map(C), horn: C('#211d18'), hornHi: C('#3a342a'), tooth: ['#b3a684', '#d8ceb0'].map(C), toothDk: C('#7d7259'), claw: C('#35302a'), glint2: C('#f4efe0'), mouth: C('#040303'),
   deer: ['#7d5b3c', '#6a4b30', '#d8cdb8'].map(C), jacket: C('#3f4a5c'), hair: C('#3a2a20'), hand: C('#c9a98a'), torch: C('#d0d0cc'),
   camper: [C('#b8503a'), C('#5a2418'), C('#d9b08c'), C('#262422'), C('#e0d6c0')],
   tent: ['#4f6a52', '#3c5440', '#6b8a6c'].map(C), car: ['#6a4a3c', '#53392e', '#1d2227', '#a8b0b8'].map(C), refl: C('#cfe6f2'),
@@ -1859,7 +1859,7 @@ function drawCreature(dt = 1 / 30) {
   if (!dying && CR.pose.jaw < 0.1 && off < 55) { // teeth: a short horizontal row one pixel under the eyes, nudged toward where it faces
     const open = CR.pose.jaw > 0.03, ty = Math.floor(my + 2) + (open ? 1 : 0), tx = Math.floor(mx + (off >= 30 ? Math.sign(fx || 1) : 0)), wdt = off < 30 ? 2 : 1; OV = [CR.x, CR.y];
     if (open) for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx, y = ty - 1; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.mouth); } // the jaw drops: a dark gap, the row a pixel lower
-    if (window.HP_FANGS) { for (const dx of [-1, 1]) { const x = tx + dx; for (let k = 0; k < 2; k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } } // test: two 2 px fangs, a gap between
+    if (window.HP_FANGS) { for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; if (x >= 0 && ty >= 0 && x < W && ty < H) put(ty * W + x, PAL.toothDk); } for (const dx of [-1, 1]) { const x = tx + dx; for (let k = 0; k < 2; k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } } // test: two 2 px fangs, a gap between
     else for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; for (let k = 0; k < ((dx & 1) ? 2 : 1); k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } // jagged: teeth of uneven length, wider than the eyes
     OV = null;
   }
