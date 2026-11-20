@@ -1280,22 +1280,20 @@ let handCv = null;
 function drawCloseup(k) {
   const w = CUW, h = CUH, cx = readCv.getContext('2d'), im = cx.createImageData(w, h), d = new Uint32Array(im.data.buffer);
   const col = (r, g, b) => (0xff000000 | clamp(b | 0, 0, 255) << 16 | clamp(g | 0, 0, 255) << 8 | clamp(r | 0, 0, 255)) >>> 0;
-  const lit = (x, y) => clamp(1.3 - Math.hypot((x - 160) / 170, (y - 92) / 110), 0.18, 1);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { // forest floor in a pool of light: soil, needles, a few leaves
-    const L = clamp(1.12 - Math.hypot((x - 160) / 165, (y - 92) / 105), 0, 1) ** 1.4, n = hash2(x * 3, y * 5), nd = n > 0.9 ? 1.45 : n > 0.62 ? 1.12 : 0.88;
-    d[y * w + x] = col(58 * L * nd, 46 * L * nd, 33 * L * nd);
-  }
+  const lit = (x, y) => clamp(1.35 - Math.hypot((x - 160) / 200, (y - 92) / 130) * 0.8, 0.5, 1);
+  // (Noah v12) no ground: the item comes up over the paused game on a clear background, with its own soft shadow
+  d.fill(0);
   const get = (x, y) => d[(y | 0) * w + (x | 0)];
   const px = (x, y, r, g, b) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= w || y >= h) return; const L = lit(x, y); d[y * w + x] = col(r * L, g * L, b * L); };
-  const dark = (x, y, k2) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= w || y >= h) return; const c = d[y * w + x]; d[y * w + x] = col((c & 255) * k2, (c >> 8 & 255) * k2, (c >> 16 & 255) * k2); };
+  const dark = (x, y, k2) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= w || y >= h) return; const i = y * w + x, c = d[i], al = c >>> 24;
+    if (al === 255) d[i] = col((c & 255) * k2, (c >> 8 & 255) * k2, (c >> 16 & 255) * k2);
+    else { const na = 1 - (1 - al / 255) * (1 - (1 - k2) * 0.8); d[i] = ((na * 255) | 0) << 24 >>> 0; } }; // on clear ground a shadow is see-through black
   const lineP = (x0, y0, x1, y1, r, g, b, t = 1) => { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5); for (let i = 0; i <= n; i++) for (let j = 0; j < t; j++) px(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n + j, r, g, b); };
-  for (let i = 0; i < 70; i++) { const x0 = hash2(i, 11) * w, y0 = hash2(i, 12) * h, a = hash2(i, 13) * TAU, L = 6 + hash2(i, 14) * 9, v = 0.55 + hash2(i, 15) * 0.5; // pine needles
-    for (let t = 0; t < L; t++) { const x = x0 + Math.cos(a) * t, y = y0 + Math.sin(a) * t; if (x >= 0 && y >= 0 && x < w && y < h) px(x, y, 92 * v, 70 * v, 40 * v); } }
   const gnd = d.slice();
   // (Noah v12) a little 3D camera for the things that lie on the ground: you're standing over them, looking down at an angle
-  const view3 = (pitch, D, F) => { const th = pitch * Math.PI / 180, C = [0, D * Math.sin(th), -D * Math.cos(th)], f = [0, -Math.sin(th), Math.cos(th)], u = [0, Math.cos(th), Math.sin(th)];
-    return { C, P: (q) => { const v = [q[0] - C[0], q[1] - C[1], q[2] - C[2]], zc = v[1] * f[1] + v[2] * f[2], yc = v[1] * u[1] + v[2] * u[2]; return [160 + F * v[0] / zc, 96 - F * yc / zc]; },
-      ray: (sx, sy) => { const a = (sx - 160) / F, b = (96 - sy) / F; return [a, f[1] + u[1] * b, f[2] + u[2] * b]; } }; };
+  const view3 = (pitch, D, F, cy0 = 96) => { const th = pitch * Math.PI / 180, C = [0, D * Math.sin(th), -D * Math.cos(th)], f = [0, -Math.sin(th), Math.cos(th)], u = [0, Math.cos(th), Math.sin(th)];
+    return { C, P: (q) => { const v = [q[0] - C[0], q[1] - C[1], q[2] - C[2]], zc = v[1] * f[1] + v[2] * f[2], yc = v[1] * u[1] + v[2] * u[2]; return [160 + F * v[0] / zc, cy0 - F * yc / zc]; },
+      ray: (sx, sy) => { const a = (sx - 160) / F, b = (cy0 - sy) / F; return [a, f[1] + u[1] * b, f[2] + u[2] * b]; } }; };
   const rotY = (v, a) => [v[0] * Math.cos(a) + v[2] * Math.sin(a), v[1], -v[0] * Math.sin(a) + v[2] * Math.cos(a)];
 
   // handwriting: a real font rendered small, thresholded to ink pixels, every word a little off the line
@@ -1337,7 +1335,7 @@ function drawCloseup(k) {
     }
   };
   if (k === 'glasses') { // (Noah v12) in perspective: lying on the ground, the frame leaning back on its arms, one arm bent, one lens cracked
-    const V = view3(50, 5.4, 210), yaw = 0.22, phi = 62 * Math.PI / 180, et = [0, Math.sin(phi), Math.cos(phi)], CX = 1.2, RX = 1.02, RY = 0.84;
+    const V = view3(50, 5.6, 200, 124), yaw = 0.22, phi = 62 * Math.PI / 180, et = [0, Math.sin(phi), Math.cos(phi)], CX = 1.2, RX = 1.02, RY = 0.84;
     const W3 = (a, b) => rotY([a, et[1] * b, et[2] * b], yaw), Pw = (q) => V.P(rotY(q, yaw)), PL = (a, b) => V.P(W3(a, b));
     const LD = [0.55, -1, 0.45], shadowOf = (q) => { const t = q[1] / -LD[1]; return [q[0] + LD[0] * t, 0, q[2] + LD[2] * t]; }; // light from up and behind your left shoulder
     const arms = [[[CX + RX, RY * 1.25], [CX + RX + 0.15, 0.06, 3.3]], [[-(CX + RX), RY * 1.25], [-(CX + RX) - 0.55, 0.12, 1.7], [-(CX + RX) - 1.25, 0.05, 2.5]]]; // the left arm bent outward
@@ -1354,7 +1352,7 @@ function drawCloseup(k) {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const dl = rotY(V.ray(x + 0.5, y + 0.5), -yaw), dn = dl[1] * nrm[1] + dl[2] * nrm[2]; if (!dn) continue;
       const t = -(Cl[1] * nrm[1] + Cl[2] * nrm[2]) / dn, q = [Cl[0] + dl[0] * t, Cl[1] + dl[1] * t, Cl[2] + dl[2] * t], a2 = q[0], b2 = q[1] * et[1] + q[2] * et[2];
-      for (const sg of [-1, 1]) if (((a2 - sg * CX) / RX) ** 2 + ((b2 - RY) / RY) ** 2 < 1) { const c = d[y * w + x]; d[y * w + x] = col((c & 255) * 0.85 + 26, (c >> 8 & 255) * 0.85 + 27, (c >> 16 & 255) * 0.85 + 32); }
+      for (const sg of [-1, 1]) if (((a2 - sg * CX) / RX) ** 2 + ((b2 - RY) / RY) ** 2 < 1) { const c = d[y * w + x], al = c >>> 24; d[y * w + x] = al === 255 ? col((c & 255) * 0.85 + 26, (c >> 8 & 255) * 0.85 + 27, (c >> 16 & 255) * 0.85 + 32) : ((Math.max(al, 70) << 24) | (235 << 16) | (225 << 8) | 215) >>> 0; } // glass: faintly there over whatever's behind
     }
     // arms (the far parts first), then the rims, the bridge, the crack and a glint
     for (const pts of armPts) for (let j = 0; j + 1 < pts.length; j++) seg3(pts[j], pts[j + 1], (q) => { const S = Pw(q); px(S[0], S[1], 168, 164, 156); px(S[0] + 1, S[1], 132, 128, 122); });
@@ -2710,7 +2708,7 @@ function step(dt) {
   if (fadeIn > 0) fadeIn -= dt;
   if (mode === 'play') { update(dt); redT = Math.max(0, redT - dt / 1.5); }
   else if (mode === 'talk') { typeTalk(dt); updateBattery(dt); buildShadows(); P.aim += clamp(wrapA(Math.atan2(CAMPER.y - P.y, CAMPER.x - P.x) - P.aim), -3 * dt, 3 * dt); fear += (0.05 - fear) * dt * 0.5; }
-  else if (mode === 'read') { updateBattery(dt); buildShadows(); }
+  else if (mode === 'read') { buildShadows(); } // (Noah v12) the game holds still behind the item, battery and all
   else if (mode === 'title') { P.aim = -Math.PI / 2 + Math.sin(tNow * 0.35) * 0.9; P.aimT = P.aim; lightOn = true; updateBattery(dt); bat.c = 1; buildShadows(); }
   else if (mode === 'dying') { deathT += dt; beam.out = deathT < 1.25 ? 1 : 0; beam.hw = 0.6; beam.R = 9; beam.cosO = Math.cos(0.84); beam.aim = P.aim; buildShadows(); if (deathT > 2.6) respawn(); }
   else if (mode === 'chapter') { wonT += dt; if (wonT > 2.4 && card.hidden) chapterCard(); }

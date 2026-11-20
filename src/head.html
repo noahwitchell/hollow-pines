@@ -62,9 +62,11 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
 #pick{position:absolute;transform:translate(-50%,-50%);padding:6px 14px 7px;font-size:20px;letter-spacing:.06em;color:var(--beam);background:rgba(4,5,8,.78);border:2px solid #5b5440;z-index:8;white-space:nowrap;animation:pickIn .35s ease-out}
 #pick::after{content:' \25B8';color:var(--dim)}
 @keyframes pickIn{from{opacity:0;transform:translate(-50%,-30%)}to{opacity:1;transform:translate(-50%,-50%)}}
-#read{position:absolute;inset:0;display:grid;place-items:center;background:rgba(2,2,4,.78);z-index:16;padding:var(--st) var(--sr) var(--sb) var(--sl);cursor:pointer}
+#read{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse 58% 52% at 50% 46%,rgba(0,0,0,.66),rgba(0,0,0,.4) 62%,rgba(0,0,0,.12) 100%);z-index:16;padding:var(--st) var(--sr) var(--sb) var(--sl);cursor:pointer}
 #read .rb{width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
-#readCv{aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;border:2px solid var(--line)}
+#readCv{aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;filter:drop-shadow(0 8px 14px rgba(0,0,0,.7))}
+#read:not([hidden]) .rb{animation:itemUp .38s cubic-bezier(.2,1.25,.4,1) both}@keyframes itemUp{from{opacity:0;transform:translateY(18px) scale(.86)}to{opacity:1;transform:none}}
+#read .cap{text-shadow:0 1px 3px #000,0 0 10px #000}
 #read .cap{opacity:0;transition:opacity .6s;display:flex;flex-direction:column;align-items:center;gap:4px}#read.on .cap{opacity:1}
 #read h3{margin:0;font-weight:400;font-size:18px;letter-spacing:.12em;color:var(--ember);text-transform:uppercase}
 #read #readP p{margin:0 0 4px;font-size:17px;line-height:1.15;color:var(--ink);text-wrap:balance}
