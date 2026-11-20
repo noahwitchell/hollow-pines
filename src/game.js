@@ -1593,8 +1593,8 @@ function leanIdle(fc) {
   const rA = track(REACH_A, t), rB = track(REACH_B, t);
   // a reach arcs out to the side first, then curls in toward you: from above it reads by sideways travel and overlap, not depth
   const reachW = (r, s, rest) => r < 0.45 ? lv3(rest, [s * 0.8, 1.2, 0.4], sstep(0, 0.45, r)) : lv3([s * 0.8, 1.2, 0.4], [s * 0.45, 1.1, 1.1], sstep(0.45, 1, r));
-  p.eR = null; p.wR = reachW(rA, 1, [0.42, 0.95, 0.7]); p.cR = track(CLAW_A, t) * (rA > 0.5 ? 1.15 : 1); p.wmR = rA > 0.5 ? 1 : 0; p.roR = rA > 0.8;
-  if (rB < 0.3) p.poleL = [-0.3, 0, -1]; // the other arm tight to the ribs, forearm hanging forward, so the two never mirror
+  p.eR = null; p.wR = reachW(rA, 1, [0.36, 0.95, 0.55]); p.cR = track(CLAW_A, t) * (rA > 0.5 ? 1.15 : 1); p.wmR = rA > 0.5 ? 1 : 0; p.roR = rA > 0.8;
+  if (rB < 0.3) p.poleL = [-0.3, 0, -1]; if (rA < 0.3) p.poleR = [0.3, 0, -1]; // the arm that isn't reaching stays tight to the ribs, so the two never mirror
   p.eL = null; p.wL = reachW(rB, -1, [-0.36, 0.95, 0.55]); p.cL = track(CLAW_B, t) * (rB > 0.5 ? 1.15 : 1); p.wmL = rB > 0.5 ? 1 : 0; p.roL = rB > 0.8;
   const s6 = Math.max(track(REACH_A, t - 6), track(REACH_B, t - 6)), h4 = track(REACH_A, t - 4) - track(REACH_B, t - 4);
   p.sh = [p.sh[0], p.sh[1] + 0.1 * s6]; p.hd = [p.hd[0] + 0.1 * h4, p.hd[1] - 0.15 * s6, p.hd[2] + 0.06 * s6]; // head drops as it leans into the reach // shoulders follow the hand, the head turns toward it, both a little late
@@ -1743,7 +1743,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   { const c = HQ(0, 0.02, 0.04); disc(c[0], c[1], 1.5, H0); }
   fillPoly(box(-0.16, 0.16, -0.16 - jd, -0.04, 0.05, 0.3), H0);
   if (!shadow) {
-    if (jd > 0.03) { fillPoly([HQ(-0.13, -0.05, 0.31), HQ(0.13, -0.05, 0.31), HQ(0.1, -0.05 - jd, 0.31), HQ(-0.1, -0.05 - jd, 0.31)], PAL.mouth); const a = HQ(-0.11, -0.05, 0.32), b = HQ(0.11, -0.05, 0.32); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
+    if (jd >= 0.1) { fillPoly([HQ(-0.13, -0.05, 0.31), HQ(0.13, -0.05, 0.31), HQ(0.1, -0.05 - jd, 0.31), HQ(-0.1, -0.05 - jd, 0.31)], PAL.mouth); const a = HQ(-0.11, -0.05, 0.32), b = HQ(0.11, -0.05, 0.32); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
     else {
       if (o.profile) { const c = HQ(nearSide * 0.15, -0.14, 0.12), d = HQ(nearSide * 0.15, -0.14, 0.29), fg = HQ(nearSide * 0.15, -0.17, 0.28); line(c[0], c[1], d[0], d[1], PAL.tooth[0]); if (fg[0] >= 0 && fg[1] >= 0 && fg[0] < W && fg[1] < H) put((fg[1] | 0) * W + (fg[0] | 0), PAL.tooth[0]); }
     }
@@ -1754,7 +1754,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   // (notes v7) each beam is real 3D geometry: out to the side, rising a little, and sweeping BACK, so it still reads as
   // antlers side-on instead of collapsing into one stick. Low and wide from the front, as designed.
   const vs = CR.viewSide || 0; // side-on, the across axis is screen-vertical: squeeze it and lift both beams so they fan above the skull
-  const AQ = (x, h, f, far) => { const xs = x * lerp(1, 0.35, vs), hh = h + 0.12 * vs + (far ? 0.15 * vs : 0); return Q([ant.p[0] + xs * ca + hh * sa, ant.p[1] - xs * sa + hh * ca, ant.p[2] + f - Math.abs(x) * ant.sw * 0.3]); };
+  const AQ = (x, h, f, far) => { const xs = x * lerp(1, 0.35, vs), hh = h + 0.12 * vs + (far ? 0.15 * sstep(0.8, 1, vs) : 0), ff = f - (far ? 0.15 * vs : 0); return Q([ant.p[0] + xs * ca + hh * sa, ant.p[1] - xs * sa + hh * ca, ant.p[2] + ff - Math.abs(x) * ant.sw * 0.3]); };
   const BEAM = [[0.08, 0.1, -0.05], [0.34, 0.22, -0.25], [0.6, 0.3, -0.45]];
   CR.antDbg = [];
   for (const sg of [-1, 1]) {
@@ -1851,8 +1851,9 @@ function drawCreature(dt = 1 / 30) {
     const e = off > 55 ? HQ(sg * es, 0.06, 0.18) : pos[sg].slice(); if (et === sg) { e[0] -= Math.round(ux); e[1] -= Math.round(uy); }
     eyes.push([e[0], e[1], off >= 30 && sg !== nearSide ? 0.5 : 1]);
   }
-  if (!dying && CR.pose.jaw <= 0.03 && off < 55) { // teeth: a short horizontal row one pixel under the eyes, nudged toward where it faces
-    const ty = Math.floor(my + 2), tx = Math.floor(mx + (off >= 30 ? Math.sign(fx || 1) : 0)), wdt = off < 30 ? 2 : 1; OV = [CR.x, CR.y];
+  if (!dying && CR.pose.jaw < 0.1 && off < 55) { // teeth: a short horizontal row one pixel under the eyes, nudged toward where it faces
+    const open = CR.pose.jaw > 0.03, ty = Math.floor(my + 2) + (open ? 1 : 0), tx = Math.floor(mx + (off >= 30 ? Math.sign(fx || 1) : 0)), wdt = off < 30 ? 2 : 1; OV = [CR.x, CR.y];
+    if (open) for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx, y = ty - 1; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.mouth); } // the jaw drops: a dark gap, the row a pixel lower
     for (let dx = -wdt; dx <= wdt; dx++) { const x = tx + dx; for (let k = 0; k < ((dx & 1) ? 2 : 1); k++) { const y = ty + k; if (x >= 0 && y >= 0 && x < W && y < H) put(y * W + x, PAL.tooth[0]); } } // jagged: teeth of uneven length, wider than the eyes
     OV = null;
   }
@@ -2196,15 +2197,24 @@ function overlays() {
     const I = beamAt(hx, hy, 3.2) * 2.6 * sstep(0.35, 0.8, face);
     if (I > 0.04) eyes(hx, hy, DEER.a, 0.07 * PPM, [232, 255, 220], I);
   }
-  // rims on the creature: the edges facing your light catch it (dim warm); top edges catch a little sky, but only where it's already visible
+  // rims on the creature: edges facing your light catch a dim warm rim; top edges catch a little sky where it's already
+  // visible. Only on thick parts (3+ px deep: torso, head, shoulders), only runs of 2+ pixels, and recomputed only when
+  // the pose is redrawn so it can't flicker while the body is still.
   if (CR.st !== 'away' && mode !== 'dying' && CR.rimUp) {
-    const lit = beam.out > 0.05 ? beamAt(CR.x, CR.y, 1.4) : 0, [sx, sy] = s2(CR.x, CR.y), [qx, qy] = s2(P.x, P.y), dl = Math.hypot(qx - sx, qy - sy) || 1, ldx = Math.round((qx - sx) / dl), ldy = Math.round((qy - sy) / dl), [rx2, ry2] = CR.rimUp;
-    const x0 = Math.max(1, Math.floor(sx - 30)), x1 = Math.min(W - 2, Math.ceil(sx + 30)), y0 = Math.max(1, Math.floor(sy - 45)), y1 = Math.min(H - 2, Math.ceil(sy + 12));
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const i = y * W + x; if (!CRM[i]) continue;
-      if (lit > 0.03 && (ldx || ldy) && !CRM[(y + ldy) * W + x + ldx]) px1(x, y, 170, 125, 80, clamp(lit * 1.2, 0, 0.55));
-      else if ((rx2 || ry2) && !CRM[(y + ry2) * W + x + rx2]) { const c = out32[i], lum = (c & 255) + (c >> 8 & 255); if (lum > 14) px1(x, y, 92, 96, 104, 0.35); }
+    const [sx, sy] = s2(CR.x, CR.y), bx = Math.floor(sx), by = Math.floor(sy), key = CR.pq + '|' + CR.anim + '|' + (beam.out > 0.05 ? 1 : 0);
+    if (CR.rimKey !== key) {
+      CR.rimKey = key; CR.rim = [];
+      const lit = beam.out > 0.05 ? beamAt(CR.x, CR.y, 1.4) : 0, [qx, qy] = s2(P.x, P.y), dl = Math.hypot(qx - sx, qy - sy) || 1, ldx = Math.round((qx - sx) / dl), ldy = Math.round((qy - sy) / dl), [rx2, ry2] = CR.rimUp;
+      const x0 = Math.max(3, bx - 30), x1 = Math.min(W - 4, bx + 30), y0 = Math.max(3, by - 45), y1 = Math.min(H - 4, by + 12), cand = new Map();
+      const thick = (x, y, dx, dy) => CRM[(y - dy) * W + x - dx] && CRM[(y - 2 * dy) * W + x - 2 * dx];
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const i2 = y * W + x; if (!CRM[i2]) continue;
+        if (lit > 0.03 && (ldx || ldy) && !CRM[(y + ldy) * W + x + ldx] && thick(x, y, ldx, ldy)) cand.set(i2, [x, y, 0, clamp(lit * 1.2, 0, 0.55)]);
+        else if ((rx2 || ry2) && !CRM[(y + ry2) * W + x + rx2] && thick(x, y, rx2, ry2)) cand.set(i2, [x, y, 1, 0.35]);
+      }
+      for (const [i2, c] of cand) { const [x, y] = c; if (cand.has(i2 - 1) || cand.has(i2 + 1) || cand.has(i2 - W) || cand.has(i2 + W)) CR.rim.push([x - bx, y - by, c[2], c[3]]); } // drop singles
     }
+    for (const [ox, oy, k, a] of CR.rim) { const x = bx + ox, y = by + oy; if (x < 0 || y < 0 || x >= W || y >= H) continue; if (k === 0) px1(x, y, 170, 125, 80, a); else { const c = out32[y * W + x], lum = (c & 255) + (c >> 8 & 255); if (lum > 14) px1(x, y, 92, 96, 104, a); } }
   }
   // reflectors flare in the beam
   for (const rf of reflectors) {
