@@ -1554,7 +1554,7 @@ const CPOSE = {
     wR: [0.6, 2.2, -0.05], eR: [0.7, 1.9, -0.1], wL: [-0.7, 1.35, 0.4], eL: [-0.62, 1.6, 0.25], cR: 1.25, cL: 1.25, ehR: 1, ehL: 1 });
   // snap: claws converge on you, crossing below the open jaw
   CPOSE.strike = Object.assign({}, T, { hp: [1.24, 0.1], sh: [2.0, 0.35], hd: [0, 1.95, 0.7], tilt: 0, et: 0, jaw: 0.15,
-    wR: [0.15, 1.55, 1.1], eR: [0.55, 1.95, 0.55], wL: [-0.15, 1.55, 1.1], eL: [-0.55, 1.95, 0.55], cR: 1.25, cL: 1.25, ehR: 1, ehL: 1, sc: 1.12 });
+    wR: [0.15, 1.55, 1.1], eR: [0.55, 1.75, 0.55], wL: [-0.15, 1.55, 1.1], eL: [-0.55, 1.75, 0.55], cR: 1.25, cL: 1.25, ehR: 1, ehL: 1, sc: 1.12 });
 }
 const lv3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 function lerpPose(a, b, t) { const o = {}; for (const k in a) o[k] = a[k] == null || b[k] == null ? (t < 0.5 ? a[k] : b[k]) : Array.isArray(a[k]) ? a[k].map((v, i) => v + (b[k][i] - v) * t) : a[k] + (b[k] - a[k]) * t; return o; }
@@ -1585,7 +1585,7 @@ const STALK_K = [[0, [0, 0, 0, 0, 0]], [4, [-0.1, -0.08, 0, -0.02, 0]], [9, [-0.
 const RUN_HIP = [[0, 1.05], [2, 0.95], [4, 1.0], [6, 1.1], [8, 1.15], [10, 1.05]];
 const CRUTCH = [[0, [0.4, 0.25, 1.05]], [3, [0.44, 0.5, 0.5]], [6, [0.44, 0.7, -0.1]], [8.5, [0.42, 0.6, 0.6]], [10, [0.4, 0.25, 1.05]]];
 function shieldArm(p, ls) { // the arm on the light side comes up and its claws cover the near eye
-  const w = [p.hd[0] + ls * 0.03, p.hd[1] - 0.12, p.hd[2] + 0.16], e = [ls * 0.42, p.hd[1] - 0.3, p.hd[2] + 0.05];
+  const w = [p.hd[0] + ls * 0.06, p.hd[1] - 0.02, p.hd[2] + 0.02], e = [ls * 0.3, p.hd[1] - 0.17, p.hd[2]]; // elbow up, forearm diagonal across the face
   if (ls > 0) { p.wR = w; p.eR = e; p.ehR = 1; p.cR = 0.9; } else { p.wL = w; p.eL = e; p.ehL = 1; p.cL = 0.9; }
   p.shield = ls;
 }
@@ -1658,6 +1658,7 @@ function crAnim() {
     const p = recoilPose(ls); CR.eyeK = 0.45; // squinting into the light
     CR.trem = Math.floor(F / 2) % 2 ? 1 : -1; // trembles the whole time it's held there (applied after the pixel snap)
     if (F > 11) p.hp = [p.hp[0] - 0.1, p.hp[1]]; // gathers itself, ready to go
+    if (F > 31) { const n = Math.min(3, Math.floor((F - 11) / 20)); p.ux -= ls * 0.08 * n; p.aR = [p.aR[0], p.aR[1], p.aR[2] - 0.04 * n]; } // straining further away the longer it's held
     return [p, 1];
   }
   // idle: breathing in 1 px steps, the arms hang still, and now and then a twitch
@@ -1704,7 +1705,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   const H0 = PAL.hide[0], H1 = PAL.hide[1], shadow = !!o.shadow, trem = o.trem || 0;
   const Qt = j => { const r = Q(j); return [r[0] + trem, r[1]]; };
   const ln = (a, b, w, col, q = Q) => { const A = q(a), B = q(b); line(A[0], A[1], B[0], B[1], col, w); };
-  const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L']; ln(L.Hp, L.K, 1.0, col); ln(L.K, L.A, 0, col); ln(L.A, L.T, 0, col); };
+  const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L']; ln(L.Hp, L.K, 1.0, col); ln(L.K, L.A, 0.7, col); ln(L.A, L.T, 0, col); };
   const arm = (s, col) => {
     const L = J[s > 0 ? 'R' : 'L'], q = o.shield === s ? Qt : Q;
     ln(L.Sh, L.E, 1.0, col, q); ln(L.E, L.W, 0, col, q);
@@ -1728,7 +1729,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
     const jd = J.p.jaw;
     fillPoly([HQ(-0.16, 0, 0.04), HQ(0.16, 0, 0.04), HQ(0.12, -0.12 - jd, 0.06), HQ(-0.12, -0.12 - jd, 0.06)], H0);
     if (jd > 0.03) { fillPoly([HQ(-0.13, -0.05, 0.07), HQ(0.13, -0.05, 0.07), HQ(0.1, -0.05 - jd, 0.07), HQ(-0.1, -0.05 - jd, 0.07)], PAL.mouth); const a = HQ(-0.11, -0.05, 0.08), b = HQ(0.11, -0.05, 0.08); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
-    else { const a = HQ(-0.09, -0.06, 0.07), b = HQ(0.09, -0.06, 0.07); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
+    else { const a = HQ(-0.06, -0.09, 0.07), b = HQ(0.06, -0.09, 0.07); line(a[0], a[1], b[0], b[1], PAL.tooth[0]); }
   }
   // antlers: they ride on a spring behind the head, so they arrive late and overshoot
   const at = ant.t * Math.PI / 180, ca = Math.cos(at), sa = Math.sin(at);
@@ -1774,6 +1775,7 @@ function drawCreature(dt = 1 / 30) {
     else { const A = CR.ant; for (let i = 0; i < 3; i++) { A.v[i] = (A.v[i] + (tgt[i] - A.p[i]) * 0.55) * 0.5; A.p[i] += A.v[i] * (stepN > 1 ? 1.4 : 1); } A.tv = (A.tv + (tt - A.t) * 0.55) * 0.5; A.t += A.tv; A.sw += (sw - A.sw) * 0.5; }
   }
   const J = crJoints(CR.pose), ant = { p: [CR.ant.p[0] + CR.pose.ux, CR.ant.p[1], CR.ant.p[2]], t: CR.ant.t * 1.5, sw: CR.ant.sw };
+  { const [qx, qy] = s2(CR.x, CR.y), [lx, ly] = leanV(qx, qy, 1), ll = Math.hypot(lx, ly) || 1, fc = Math.abs((Math.cos(CR.a) * lx + Math.sin(CR.a) * ly) / ll); if (mode !== 'dying') ant.sw = Math.max(ant.sw, 0.6 * sstep(0.3, 0.8, 1 - fc)); } // side-on, the antlers sweep back so they don't collapse into a stick
   let [sx, sy] = s2(CR.x, CR.y), G, SH, fx, fy, rx, ry, ux, uy;
   const sc = CR.pose.sc || 1;
   if (dying) { // it slams in until its eyes and teeth fill the screen
@@ -1808,7 +1810,7 @@ function drawCreature(dt = 1 / 30) {
   }
   OV = [CR.x, CR.y];
   const HQ = crDraw(Q, Qr, J, ant, ka, nearSide, { trem: CR.trem || 0, shield: CR.pose.shield || 0 });
-  if (CR.smear && CR.prevW) for (const s of ['R', 'L']) { const a = CR.prevW[s], b = Q(J[s].W); line(a[0], a[1], b[0], b[1], PAL.tooth[1]); } // a one-frame claw smear on the strike
+  if (CR.smear && CR.prevW) for (const s of ['R', 'L']) { const a = CR.prevW[s], b = Q(J[s].W), d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, L = Math.min(d, 6), ex = b[0] + (a[0] - b[0]) / d * L, ey = b[1] + (a[1] - b[1]) / d * L, mx = (b[0] + ex) / 2, my = (b[1] + ey) / 2; line(mx, my, ex, ey, PAL.hide[2]); line(b[0], b[1], mx, my, PAL.claw, 0.8); } // a one-frame claw smear: short, widest at the claw
   CR.prevW = { R: Q(J.R.W), L: Q(J.L.W) };
   OV = null;
   // eyes: locked to the head. A head tilt drops one eye a pixel; in profile only the near eye shows clearly; the shield hand covers one
@@ -1867,7 +1869,7 @@ function drawPlayer() {
 function drawProps() {
   { const [sx, sy] = s2(BRIDGE.x, BRIDGE.y); if (onScr(sx, sy, 30)) rect(sx, sy, BRIDGE.a, 3.2 * PPM, 0.75 * PPM, (u, v) => Math.abs(v) > 0.8 ? PAL.plank[1] : (Math.floor((u + 1) * 9) % 3 === 0 ? PAL.plank[1] : (Math.floor((u + 1) * 9) % 2 ? PAL.plank[0] : PAL.plank[2]))); }
   { const [sx, sy] = s2(TENT.x, TENT.y); if (onScr(sx, sy, 20)) rect(sx, sy, TENT.a, TENT.w / 2 * PPM, TENT.h / 2 * PPM, (u, v) => Math.abs(v) < 0.08 ? PAL.tent[2] : (v < 0 ? PAL.tent[0] : PAL.tent[1])); }
-  for (const f of fires) { const [sx, sy] = s2(f.x, f.y); if (!onScr(sx, sy, 12)) continue; for (let i = 0; i < 9; i++) { const a = i * TAU / 9; disc(sx + Math.cos(a) * 0.72 * PPM, sy + Math.sin(a) * 0.72 * PPM, 0.17 * PPM, PAL.stone[i % 2]); } for (const a of [0.5, 2.1]) line(sx - Math.cos(a) * 4, sy - Math.sin(a) * 4, sx + Math.cos(a) * 4, sy + Math.sin(a) * 4, PAL.log[2], 0.8); }
+  for (const f of fires) { const [sx, sy] = s2(f.x, f.y); if (!onScr(sx, sy, 12)) continue; for (let i = 0; i < 9; i++) { const a = i * TAU / 9; disc(sx + Math.cos(a) * 0.72 * PPM, sy + Math.sin(a) * 0.72 * PPM, 0.17 * PPM, RING_STONE[i % 2]); } for (const a of [0.5, 2.1]) line(sx - Math.cos(a) * 4, sy - Math.sin(a) * 4, sx + Math.cos(a) * 4, sy + Math.sin(a) * 4, PAL.log[2], 0.8); }
   { const [sx, sy] = s2(CAR.x, CAR.y); if (onScr(sx, sy, 30)) rect(sx, sy, CAR.a, CAR.w / 2 * PPM, CAR.h / 2 * PPM, (u, v) => (Math.abs(u) > 0.93 ? PAL.car[1] : (u > -0.35 && u < 0.45 ? (Math.abs(v) < 0.8 ? PAL.car[2] : PAL.car[0]) : (Math.abs(v) > 0.88 ? PAL.car[1] : PAL.car[0])))); }
   { const [sx, sy] = s2(BARRIER.x, BARRIER.y); if (onScr(sx, sy, 30)) { for (const sg of [-1, 1]) disc(sx + sg * BARRIER.w * 0.42 * PPM, sy, 1.4, PAL.post); rect(sx, sy, 0, BARRIER.w / 2 * PPM, 0.16 * PPM, (u) => PAL.stripe[Math.floor((u + 1) * 5) % 2]); } }
   { const [sx, sy] = s2(POST.x, POST.y); if (onScr(sx, sy, 6)) disc(sx, sy, 1.3, PAL.post); }
@@ -1935,6 +1937,7 @@ function drawCamper() {
     ln(Q(-0.08, sg * 0.1, 0.42), Q(0.3, sg * 0.12, 0.5), 1.2, pants);
     ln(Q(0.3, sg * 0.12, 0.5), Q(0.36, sg * 0.12, 0.06), 1, pants);
     ln(Q(0.36, sg * 0.12, 0.04), Q(0.46, sg * 0.12, 0.02), 0.8, C_BOOT);
+    const kn = Q(0.32, sg * 0.12, 0.52); if (kn[0] >= 0 && kn[1] >= 0 && kn[0] < W && kn[1] < H) put((kn[1] | 0) * W + (kn[0] | 0), C_KNEE); // knees up toward the fire
   }
   // hunched torso: hips on the log, shoulders rounded forward toward the warmth
   const us = shS + tremor;
@@ -1960,12 +1963,12 @@ function drawCamper() {
   const nose = Q(0.32 + hdF * 2.2, hs * 1.6, 1.17 + br); C.faceP = C.away ? null : nose; if (nose[0] >= 0 && nose[1] >= 0 && nose[0] < W && nose[1] < H) put((nose[1] | 0) * W + (nose[0] | 0), skin);
   OV = null;
 }
-const C_RIM = C('#c86a3c'), C_PANTS = C('#3a3a40'), C_BOOT = C('#2a2420'), C_STICK = C('#3b2a1c');
+const RING_STONE = [C('#3a3631'), C('#2c2925')], C_RIM = C('#f2a774'), C_PANTS = C('#3a3a40'), C_KNEE = C('#5c5a62'), C_BOOT = C('#2a2420'), C_STICK = C('#3b2a1c');
 
 // the campfire: a coal bed whose pixels step through the ramp, three flame tongues on their own cycles drawn at
 // about 12 fps with uneven holds, tips that break off and rise, sparks and the odd pop. The firelight follows the
 // height of the middle flame on the same drawn frames, so the whole clearing pulses with it.
-const FIRE_RAMP = [[58, 14, 8], [138, 30, 14], [212, 80, 26], [255, 179, 58], [255, 240, 168]];
+const FIRE_RAMP = [[58, 14, 8], [122, 26, 14], [184, 64, 26], [224, 122, 36], [255, 240, 168]], FIRE_YEL = [255, 210, 74]; // ash, red, orange, amber, core
 const TONGUES = [{ o: -2, hs: [3, 5, 4, 2, 4] }, { o: 2, hs: [4, 5, 3, 6, 5, 3, 4] }, { o: 0, hs: [5, 7, 9, 7, 4, 6] }];
 function fireSpark(f, n) { const A = f.fa; for (let k = 0; k < n; k++) { const t = TONGUES[R() * 3 | 0]; A.sparks.push({ o: t.o + (R() * 3 | 0) - 1, h0: t.hs[A.n % t.hs.length] + 1, age: 0, life: 12 + R() * 12, w: R() < 0.5 ? -1 : 1 }); } }
 function fireTick(f, dt) {
@@ -1976,7 +1979,7 @@ function fireTick(f, dt) {
   while (A.acc >= A.hold) {
     A.acc -= A.hold; A.hold = A.hold === 2 ? 3 : 2; A.n++;
     for (const b of A.blobs) { b.h++; b.life--; } A.blobs = A.blobs.filter(b => b.life > 0);
-    for (let t = 0; t < 3; t++) { A.jit[t] = (R() * 3 | 0) - 1; const T = TONGUES[t], i = A.n % T.hs.length; if (T.hs[i] === Math.max(...T.hs)) A.blobs.push({ o: T.o + A.jit[t], h: T.hs[i] + (t === 2 && A.flare > 0 ? 2 : 0), life: 2 + (R() * 2 | 0) }); }
+    for (let t = 0; t < 3; t++) { A.jit[t] = t === 0 ? -(R() * 2 | 0) : t === 1 ? (R() * 2 | 0) : (R() * 3 | 0) - 1; /* side tongues lean outward so ground shows between the tips */ const T = TONGUES[t], i = A.n % T.hs.length; if (T.hs[i] === Math.max(...T.hs)) A.blobs.push({ o: T.o + A.jit[t], h: T.hs[i] + (t === 2 && A.flare > 0 ? 2 : 0), life: 2 + (R() * 2 | 0) }); }
   }
   A.flare = Math.max(0, A.flare - fr);
   A.nextSp -= fr; if (A.nextSp <= 0) { A.nextSp = 15 + R() * 30; fireSpark(f, 1); }
@@ -2000,7 +2003,7 @@ function drawFlames(f) {
       const fr = k / h, w = k < 2 ? 3 : fr < 0.5 ? 2 : 1, sh = Math.round(j * fr);
       for (let cc = 0; cc < w; cc++) {
         const c = cc - (w >> 1), edge = w > 1 && c !== 0;
-        const col = k === h - 1 ? FIRE_RAMP[1] : k < 2 ? (edge ? FIRE_RAMP[3] : t === 2 && k === 0 ? FIRE_RAMP[4] : [255, 214, 110]) : fr < 0.6 ? (edge ? FIRE_RAMP[2] : FIRE_RAMP[3]) : FIRE_RAMP[2];
+        const col = k >= h - 2 ? FIRE_RAMP[1] : edge ? FIRE_RAMP[2] : k < 2 ? (t === 2 && k === 0 ? FIRE_RAMP[4] : FIRE_YEL) : FIRE_RAMP[3]; // red tips, orange edges, amber middle, yellow only at the base
         P1(T.o + sh + c, k + 1, col);
       }
     }
@@ -2106,7 +2109,7 @@ function shade() {
       const cr = col & 255, cg = (col >> 8) & 255, cb = (col >> 16) & 255;
       let r = 0, g = 0, b = 0;
       if (m > 0.0005) {
-        const dth = m < 0.014 ? hash2(x + grainF, y * 3 + grainF) : BAY[bayRow | (x & 3)];
+        const dth = LF[i] === 1 ? 0.5 : m < 0.014 ? hash2(x + grainF, y * 3 + grainF) : BAY[bayRow | (x & 3)]; // figures stay solid: no dither on them
         let q = Math.floor(Math.pow(m, 0.72) * LEV + dth) / LEV;
         if (q > 1.3) q = 1.3;
         if (q > 0) { const s = q / m; r = cr * lr * s; g = cg * lg * s; b = cb * lb * s; }
@@ -2142,7 +2145,7 @@ function overlays() {
     }
     else if (I > 0.04) for (const [ex, ey, ek = 1] of CR.eyeP) {
       const c = red ? [255, 255, 250] : [255, 250, 230], h = red ? [210, 210, 200] : [160, 150, 118], v = clamp(I, 0, 1) * ek, big = red ? 3 : 1;
-      if ((CR.eyeK || 1) > 0.6) for (let oy = -big; oy <= big; oy++) for (let ox = -big; ox <= big; ox++) { if (ox || oy) px1(ex + ox, ey + oy, h[0], h[1], h[2], v * 0.4); }
+      if (red) for (let oy = -big; oy <= big; oy++) for (let ox = -big; ox <= big; ox++) { if (ox || oy) px1(ex + ox, ey + oy, h[0], h[1], h[2], v * 0.4); }
       px1(ex, ey, c[0], c[1], c[2], v); if (red) for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) px1(ex + ox, ey + oy, c[0], c[1], c[2], 1);
     }
   }
