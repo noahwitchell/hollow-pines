@@ -181,7 +181,7 @@ const PAL = {
   tent: ['#4f6a52', '#3c5440', '#6b8a6c'].map(C), car: ['#6a4a3c', '#53392e', '#1d2227', '#a8b0b8'].map(C), refl: C('#cfe6f2'),
   stone: ['#7d7a72', '#5f5c56'].map(C), log: ['#5a4230', '#7c6248', '#3c2c20'].map(C), post: C('#4a3a2a'),
   plank: ['#6e5638', '#5a452c', '#7d6442'].map(C), bone: [C('#cfc6b0'), C('#a49b86')], glassF: C('#9a9aa0'), paper: [C('#cfc5a8'), C('#6a6250')], wrap: [C('#a83a2a'), C('#d8c8a0')], pack: [C('#3d5a7a'), C('#2a3f57')], torn: [C('#7a6a3a'), C('#5a4c28'), C('#1a1612')], blood: [C('#33170f'), C('#3e120c'), C('#240806')],
-  coon: ['#6b6862', '#3a3835', '#a9a59b', '#1c1b1a'].map(C), rabbit: ['#9c8c76', '#6e604e', '#ece6da'].map(C), fox: ['#a8582a', '#7a3c1c', '#e8e0d0', '#2a1a12'].map(C), owl: C('#4a4036'), stripe: [C('#c8c0a8'), C('#a8432c')],
+  coon: ['#6b6862', '#3a3835', '#a9a59b', '#1c1b1a'].map(C), rabbit: ['#9c8c76', '#6e604e', '#ece6da'].map(C), fox: ['#a8582a', '#7a3c1c', '#e8e0d0', '#2a1a12'].map(C), owl: C('#6c5e4c'), stripe: [C('#c8c0a8'), C('#a8432c')],
 };
 
 const roadX = y => 3 * Math.sin(y * 0.031) + 1.5 * Math.sin(y * 0.083 + 1);
@@ -1166,15 +1166,18 @@ function beastFrame(c, B, startFlee) {
       c.ha = c.a;
     }
   } else if (c.mode === 'prep') { // anticipation
-    const f = c.pf++, L = B.prep, piv = (k) => { c.a = c.a0 + wrapA(away - c.a0) * k; c.ha = c.a; };
-    if (c.kind === 'rabbit') { if (f === 7) piv(0.5); if (f === 8) piv(1); }
-    else if (c.kind === 'fox') { if (f === 3) piv(0.5); if (f === 4) piv(1); }
-    else if (c.kind === 'raccoon') { if (f === 6) piv(0.5); if (f === 7) piv(1); }
-    else { if (f === 8) piv(0.25); if (f === 9) piv(0.5); if (f === 10) piv(0.75); if (f === 11) piv(1); }
-    if (c.pf >= L) { c.mode = 'run'; c.gf = c.kind === 'rabbit' ? 1 : 0; c.want = away; }
+    const f = c.pf++, A0 = { rabbit: 7, fox: 3, raccoon: 6, deer: 8 }[c.kind], L = A0 + 5;
+    if (f === 0) c.fb = (R() < 0.5 ? -1 : 1) * (0.45 + R() * 0.25); // it bolts off at an angle, not straight up the screen
+    const want = away + c.fb;
+    if (f === A0) c.ha = want; // the head goes first, held two frames
+    if (f === A0 + 2) { const d = wrapA(want - c.a); c.a = Math.abs(d) > Math.PI / 2 ? c.a + Math.sign(d) * Math.PI / 4 : want; c.ha = want; } // cut, at most one in-between
+    if (f === A0 + 3) c.a = want;
+    c.crouch = f >= A0 + 2;
+    if (c.pf >= L) { c.mode = 'run'; c.crouch = false; c.gf = c.kind === 'rabbit' ? 1 : 0; }
   } else { // the bolt: steer away from you in snapped steps; the rabbit only changes course when it lands
-    if (c.kind === 'rabbit') { if (c.ci === 6) { c.hop++; if (c.hop % 2 === 0) c.zig = c.zig > 0 ? -0.6 : 0.6; c.a = away + c.zig; } }
-    else if (c.fr % 3 === 0) c.a += clamp(wrapA(away - c.a), -SNAP16, SNAP16);
+    const fb = c.fb || 0;
+    if (c.kind === 'rabbit') { if (c.ci === 6) { c.hop++; if (c.hop % 2 === 0) c.zig = c.zig > 0 ? -0.6 : 0.6; c.a = away + fb * 0.6 + c.zig; } }
+    else if (c.fr % 3 === 0) c.a += clamp(wrapA(away + fb - c.a), -SNAP16, SNAP16);
     c.ha = c.a;
   }
   beastLegs(c, B);
@@ -1187,8 +1190,9 @@ function drawBeast(c) {
   const [lx, ly] = leanV(sx, sy, 1), LL = Math.hypot(lx, ly) || 1, lux = lx / LL, luy = ly / LL, U = 12.5;
   const a = Math.round(c.a / SNAP16) * SNAP16, fx = Math.cos(a), fy = Math.sin(a), ha = Math.round(c.ha / SNAP16) * SNAP16, hx = Math.cos(ha), hy = Math.sin(ha);
   const run = c.mode === 'run', g = c.stots > 0 ? B.stot : B, i = c.ci != null ? c.ci : 0;
-  let bob = run ? g.bob[i] : 0; const ext = run ? g.ext[i] : 1, pf = c.pf, prep = c.mode === 'prep';
+  let bob = run ? g.bob[i] * 2 : 0, ext = run ? 1 + (g.ext[i] - 1) * 2 : 1; const pf = c.pf, prep = c.mode === 'prep'; // (director p2) the cycle exaggerated on the body so it reads
   if (prep && c.kind === 'rabbit' && pf >= 4) bob = -1; // crouch
+  if (c.crouch) { bob = -1; ext = 1 - 1 / (B.len * PPM); } // the gathered drawing before the launch: lower and a pixel shorter
   const pc = PAL[B.pal], dark = pc[1], body = pc[0], rim = lighten(body, 0.22), legC = c.kind === 'fox' ? pc[3] : c.kind === 'raccoon' ? pc[3] : OUTL;
   let sway = 0; if (run && B.sway) sway = c.feet[0].down ? -1 : 1; // the waddle leans over the planted side
   const Pj = (wx, wy, h, b = bob) => { const [x, y] = s2(wx, wy); return [Math.floor(x + lux * (h * U + b) - fy * sway) + 0.5, Math.floor(y + luy * (h * U + b) + fx * sway) + 0.5]; };
@@ -1202,7 +1206,7 @@ function drawBeast(c) {
   legs(true);
   // tail, behind the body
   const tx = Math.cos(c.ta), ty = Math.sin(c.ta);
-  if (c.kind === 'fox') for (let k = 1; k <= 3; k++) { const q = Pj(rw[0] - tx * 0.13 * k, rw[1] - ty * 0.13 * k, B.hip * (0.85 - 0.12 * k)); disc(q[0], q[1], 1.3 - 0.15 * k, k === 3 ? pc[2] : body); }
+  if (c.kind === 'fox') { const tdrop = run && ext > 1.05 ? -1 : 0, tlvl = run && ext < 0.95 ? 0 : 0.12; for (let k = 1; k <= 3; k++) { const q = Pj(rw[0] - tx * 0.13 * k, rw[1] - ty * 0.13 * k, B.hip * (0.85 - tlvl * k), bob + tdrop * k / 3); disc(q[0], q[1], 1.3 - 0.15 * k, k === 3 ? pc[2] : body); } }
   else if (c.kind === 'raccoon') for (let k = 1; k <= 4; k++) { const q = Pj(rw[0] - tx * 0.08 * k, rw[1] - ty * 0.08 * k, 0.16 - 0.02 * k, bob - sway * 2); disc(q[0], q[1], 1.1, k % 2 ? pc[3] : pc[2]); }
   // body: belly in shadow, back catching the light
   const r0 = Pj(rw[0], rw[1], B.hip + B.hb), f0 = Pj(fw[0], fw[1], B.hip + B.hb);
@@ -1217,7 +1221,9 @@ function drawBeast(c) {
   const hwp = [fw[0] + hx * B.hf, fw[1] + hy * B.hf], hp = Pj(hwp[0], hwp[1], B.head + low + snap, bob + drop);
   if (c.kind === 'deer' || c.kind === 'fox') { const n0 = Pj(fw[0], fw[1], B.hip + B.hb * 1.5); line(n0[0], n0[1], hp[0], hp[1], body, c.kind === 'deer' ? 1.1 : 0.8); }
   const px_ = -hy, py_ = hx, side = (k, h) => Pj(hwp[0] + px_ * k - hx * 0.03, hwp[1] + py_ * k - hy * 0.03, B.head + low + snap + h, bob + drop);
-  if (c.kind === 'rabbit') { const fl = prep && pf >= 4 ? 0.05 : 0.15; for (const sg of [-1, 1]) { const e = side(sg * 0.025, fl + (c.ear > 2 && sg > 0 ? -0.06 : 0)); const b0 = side(sg * 0.02, 0.02); line(b0[0], b0[1], e[0], e[1], dark, 0); } }
+  if (c.kind === 'rabbit' && run && (i === 1 || i === 2)) for (const sd of [-1, 1]) { const hw = hipW(c, B, -1, sd, a, ext), q0 = Pj(hw[0], hw[1], B.hip * 0.6), q1 = Pj(hw[0] - fx * 0.12, hw[1] - fy * 0.12, 0.02); line(q0[0], q0[1], q1[0], q1[1], pc[2], 0); } // the big hind feet flash on the push
+  if (c.kind === 'rabbit' && run) { const e0 = side(0, 0.03), e1 = Pj(hwp[0] - hx * 0.2, hwp[1] - hy * 0.2, B.head + 0.04, bob); line(e0[0], e0[1], e1[0], e1[1], dark, 0); } // ears laid back
+  else if (c.kind === 'rabbit') { const fl = prep && pf >= 4 ? 0.05 : 0.15; for (const sg of [-1, 1]) { const e = side(sg * 0.025, fl + (c.ear > 2 && sg > 0 ? -0.06 : 0)); const b0 = side(sg * 0.02, 0.02); line(b0[0], b0[1], e[0], e[1], dark, 0); } }
   disc(hp[0], hp[1], B.hr + 0.8, OUTL); disc(hp[0], hp[1], B.hr, c.kind === 'raccoon' ? pc[2] : body);
   if (c.kind === 'raccoon') { const m0 = side(-0.05, 0), m1 = side(0.05, 0); line(m0[0], m0[1], m1[0], m1[1], pc[3], 0); if (c.mode === 'idle' && c.dab > 0) { const pw = Pj(fw[0] + fx * (0.06 + (c.dab % 2) * 0.05), fw[1] + fy * (0.06 + (c.dab % 2) * 0.05), 0); line(pw[0], pw[1], pw[0], pw[1], pc[3], 0); } }
   if (c.kind === 'fox') { const sn = Pj(hwp[0] + hx * 0.12, hwp[1] + hy * 0.12, B.head - 0.03, bob + drop); line(hp[0], hp[1], sn[0], sn[1], body, 0); line(sn[0], sn[1], sn[0], sn[1], pc[3], 0); for (const sg of [-1, 1]) { const e = side(sg * 0.05, 0.1); line(e[0], e[1], e[0], e[1], dark, 0); } }
@@ -1225,14 +1231,15 @@ function drawBeast(c) {
   legs(false);
   c.eyeS = [hp[0], hp[1], ha];
 }
-function drawOwl() { // flies 1.5 m up: three flaps, then a long glide held at full spread
-  const [sx0, sy0] = s2(owl.x, owl.y); if (!onScr(sx0, sy0, 20)) return;
-  const [lx, ly] = leanV(sx0, sy0, 1), LL = Math.hypot(lx, ly) || 1, f = Math.floor(owl.t * 30), cyc = f % 42, flap = cyc < 18;
-  const SP = [6, 6, 4, 2, 2, 4], span = flap ? SP[cyc % 6] : 6, back = flap ? 0 : 1, hgt = 1.5 * 12.5 + (flap ? Math.floor(cyc / 6) : 3 - Math.floor((cyc - 18) / 8));
+function drawOwl() { // (director p2) 2 m up, a real wingspan, a pale belly; three flaps, then a glide held dead still
+  const [sx0, sy0] = s2(owl.x, owl.y); if (!onScr(sx0, sy0, 30)) return;
+  const [lx, ly] = leanV(sx0, sy0, 1), LL = Math.hypot(lx, ly) || 1, f = Math.floor(owl.t * 30), cyc = f % 44, flap = cyc < 18;
+  const SP = [8, 8, 5, 2, 2, 5], span = flap ? SP[cyc % 6] : 8, back = flap ? 0 : 1, hgt = 2 * 12.5 + (flap ? Math.floor(cyc / 6) : 3);
   const sx = Math.floor(sx0 + lx / LL * hgt) + 0.5, sy = Math.floor(sy0 + ly / LL * hgt) + 0.5, L = Math.hypot(owl.vx, owl.vy) || 1, ux = owl.vx / L, uy = owl.vy / L, px = -uy, py = ux;
-  for (const sg of [-1, 1]) line(sx, sy, Math.floor(sx + px * span * sg - ux * back) + 0.5, Math.floor(sy + py * span * sg - uy * back) + 0.5, PAL.owl, 0.7);
-  ell(sx, sy, Math.atan2(uy, ux), 1.6, 1.1, () => PAL.owl); disc(sx + ux * 1.6, sy + uy * 1.6, 1, PAL.owl);
+  for (const sg of [-1, 1]) { const ex = Math.floor(sx + px * span * sg - ux * back) + 0.5, ey = Math.floor(sy + py * span * sg - uy * back) + 0.5, mx = sx + px * span * 0.4 * sg, my = sy + py * span * 0.4 * sg; line(sx, sy, mx, my, PAL.owl, 1.0); line(mx, my, ex, ey, PAL.owl, 0); }
+  ell(sx, sy, Math.atan2(uy, ux), 2, 1.3, (u) => u < -0.2 ? OWL_BELLY : PAL.owl); disc(sx + ux * 2, sy + uy * 2, 1.2, PAL.owl);
 }
+const OWL_BELLY = C('#9a8e78');
 function spawnCritter(loud = false) {
   const kinds = ['raccoon', 'raccoon', 'rabbit', 'rabbit', 'fox'], kind = kinds[R() * kinds.length | 0];
   const a = (loud ? beam.aim + Math.PI * (0.5 + R()) : P.moving ? P.face : beam.aim) + (R() - 0.5) * 1.8, dd = loud ? 8 + R() * 4 : 9 + R() * 8;
@@ -2045,7 +2052,9 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   const H0 = PAL.hide[0], H1 = PAL.hide[1], shadow = !!o.shadow, trem = o.trem || 0;
   const Qt = j => { const r = Q(j); return [r[0] + trem, r[1]]; };
   const ln = (a, b, w, col, q = Q) => { const A = q(a), B = q(b); line(A[0], A[1], B[0], B[1], col, w); };
-  const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L'], ka = Q(L.K), aa = Q(L.A), vert = Math.abs(aa[0] - ka[0]) < Math.abs(aa[1] - ka[1]) * 0.36; ln(L.Hp, L.K, 1.0, col); ln(L.K, L.A, vert ? 0 : 0.7, col); /* (Noah v12) a near-vertical shin at r 0.7 alternates 1 and 2 px: a ladder */ ln(L.A, L.T, 0, col); ln(L.T, [L.T[0], L.T[1], L.T[2] + 0.1], 0, col); }; // feet end in a flat pad, hands in claws
+  const leg = (s, col) => { const L = J[s > 0 ? 'R' : 'L'], ka = Q(L.K), aa = Q(L.A), hq = Q(L.Hp), vert = Math.abs(aa[0] - ka[0]) < Math.abs(aa[1] - ka[1]) * 0.36, tv = Math.abs(ka[0] - hq[0]) < Math.abs(ka[1] - hq[1]) * 0.36;
+    if (tv) { line(hq[0], hq[1], ka[0], ka[1], col, 0); line(hq[0] + 1, hq[1], ka[0] + 1, ka[1], col, 0); } else ln(L.Hp, L.K, 1.0, col); // a near-vertical thigh is a fixed 2 px column, not stamped discs
+    ln(L.K, L.A, vert ? 0 : 0.7, col); /* (Noah v12) a near-vertical shin at r 0.7 alternates 1 and 2 px: a ladder */ ln(L.A, L.T, 0, col); ln(L.T, [L.T[0], L.T[1], L.T[2] + 0.1], 0, col); }; // feet end in a flat pad, hands in claws
   const arm = (s, col) => {
     const L = J[s > 0 ? 'R' : 'L'], q = o.shield === s ? Qt : Q;
     ln(L.Sh, L.E, 1.0, col, q); hand(s, col, q);
@@ -2174,7 +2183,7 @@ function drawCreature(dt = 1 / 30) {
       MASK = SHB; MV = 0.6; crDraw(Qs, Qsr, J, ant, ka, nearSide, { shadow: true }); MASK = null;
       const Lm = 2.6 * k, x0 = Math.max(0, Math.floor(sx - Lm - 8)), x1 = Math.min(W - 1, Math.ceil(sx + Lm + 8)), y0 = Math.max(0, Math.floor(sy - Lm - 8)), y1 = Math.min(H - 1, Math.ceil(sy + Lm + 8));
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * W + x, q = ((x + 0.5 - sx) * bx + (y + 0.5 - sy) * by) / Lm; if (SHB[i] < 1 && q > 0.6) SHB[i] += (1 - SHB[i]) * Math.min(1, (q - 0.6) / 0.4); } // (Noah v12) the far end fades out evenly: a checker dither on thin legs read as a striped line on the ground
-      for (let y = Math.floor(sy) - 1; y <= sy + 1; y++) for (let x = Math.floor(sx) - 2; x <= sx + 2; x++) if (x >= 0 && y >= 0 && x < W && y < H) SHB[y * W + x] = 1; // a pixel of ground between feet and shadow
+      // (Noah v12) no un-shadowed bar at the feet: it popped in as a bright line on the ground whenever it ran away from you
     }
     // contact shadow: always, under its feet, with a darker core
     MASK = SHA;
