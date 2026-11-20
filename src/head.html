@@ -63,10 +63,11 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
 #pick::after{content:' \25B8';color:var(--dim)}
 @keyframes pickIn{from{opacity:0;transform:translate(-50%,-30%)}to{opacity:1;transform:translate(-50%,-50%)}}
 #read{position:absolute;inset:0;display:grid;place-items:center;background:rgba(2,2,4,.78);z-index:16;padding:var(--st) var(--sr) var(--sb) var(--sl);cursor:pointer}
-#read .rb{width:min(560px,100%);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
-#readCv{width:min(320px,52vh);aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;border:2px solid var(--line)}
-#read h3{margin:0;font-weight:400;font-size:22px;letter-spacing:.12em;color:var(--ember);text-transform:uppercase}
-#read #readP p{margin:0 0 6px;font-size:21px;line-height:1.15;color:var(--ink);text-wrap:balance}
+#read .rb{width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+#readCv{aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;border:2px solid var(--line)}
+#read .cap{opacity:0;transition:opacity .6s;display:flex;flex-direction:column;align-items:center;gap:4px}#read.on .cap{opacity:1}
+#read h3{margin:0;font-weight:400;font-size:18px;letter-spacing:.12em;color:var(--ember);text-transform:uppercase}
+#read #readP p{margin:0 0 4px;font-size:17px;line-height:1.15;color:var(--ink);text-wrap:balance}
 #read span{font-size:15px;color:var(--dim);letter-spacing:.1em}
 @media (prefers-reduced-motion: reduce){.hint,#hp,#note{transition:none}#hp.hit{animation:none}#pick{animation:none}}
 </style>
@@ -82,7 +83,7 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   <div id="hp" hidden><i></i></div>
   <div id="note" hidden></div>
   <button id="pick" hidden></button>
-  <div id="read" hidden><div class="rb"><canvas id="readCv" width="128" height="72"></canvas><h3 id="readT"></h3><div id="readP"></div><span>TAP TO PUT IT AWAY</span></div></div>
+  <div id="read" hidden><div class="rb"><canvas id="readCv" width="320" height="180"></canvas><div class="cap"><h3 id="readT"></h3><div id="readP"></div><span>TAP TO PUT IT AWAY</span></div></div></div>
   <button id="pauseBtn" aria-label="Pause" hidden>II</button>
   <div id="rbtns" hidden>
     <button id="focusBtn" aria-label="Beam focus">WIDE</button>

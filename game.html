@@ -63,10 +63,11 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
 #pick::after{content:' \25B8';color:var(--dim)}
 @keyframes pickIn{from{opacity:0;transform:translate(-50%,-30%)}to{opacity:1;transform:translate(-50%,-50%)}}
 #read{position:absolute;inset:0;display:grid;place-items:center;background:rgba(2,2,4,.78);z-index:16;padding:var(--st) var(--sr) var(--sb) var(--sl);cursor:pointer}
-#read .rb{width:min(560px,100%);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
-#readCv{width:min(320px,52vh);aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;border:2px solid var(--line)}
-#read h3{margin:0;font-weight:400;font-size:22px;letter-spacing:.12em;color:var(--ember);text-transform:uppercase}
-#read #readP p{margin:0 0 6px;font-size:21px;line-height:1.15;color:var(--ink);text-wrap:balance}
+#read .rb{width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+#readCv{aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;border:2px solid var(--line)}
+#read .cap{opacity:0;transition:opacity .6s;display:flex;flex-direction:column;align-items:center;gap:4px}#read.on .cap{opacity:1}
+#read h3{margin:0;font-weight:400;font-size:18px;letter-spacing:.12em;color:var(--ember);text-transform:uppercase}
+#read #readP p{margin:0 0 4px;font-size:17px;line-height:1.15;color:var(--ink);text-wrap:balance}
 #read span{font-size:15px;color:var(--dim);letter-spacing:.1em}
 @media (prefers-reduced-motion: reduce){.hint,#hp,#note{transition:none}#hp.hit{animation:none}#pick{animation:none}}
 </style>
@@ -82,7 +83,7 @@ button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   <div id="hp" hidden><i></i></div>
   <div id="note" hidden></div>
   <button id="pick" hidden></button>
-  <div id="read" hidden><div class="rb"><canvas id="readCv" width="128" height="72"></canvas><h3 id="readT"></h3><div id="readP"></div><span>TAP TO PUT IT AWAY</span></div></div>
+  <div id="read" hidden><div class="rb"><canvas id="readCv" width="320" height="180"></canvas><div class="cap"><h3 id="readT"></h3><div id="readP"></div><span>TAP TO PUT IT AWAY</span></div></div></div>
   <button id="pauseBtn" aria-label="Pause" hidden>II</button>
   <div id="rbtns" hidden>
     <button id="focusBtn" aria-label="Beam focus">WIDE</button>
@@ -396,7 +397,7 @@ function buildWorld(seed) {
       { k: 'page2', x: p2[0], y: p2[1], r: 1.7, a: rnd() * TAU },
       { k: 'glasses', x: gx, y: gy, r: 1.7, a: rnd() * TAU, den: true },
       { k: 'notebook', x: DEN.x - 1.4, y: DEN.y + 0.9, r: 1.8, hidden: true, den: true },
-      { k: 'candy', x: DEN.x + 1.8 + Math.cos(0.7 + Math.PI / 2) * 1.05, y: DEN.y - 1.2 + Math.sin(0.7 + Math.PI / 2) * 1.05, r: 1.7, a: 0.7, den: true },
+      // (Noah v11) the candy bar is held back for later: the camper hands it over, or it turns up in the next level
     ];
   }
   for (const f of fires) { f.sd0 = new Float32Array(FNB).fill(1e9); f.sr0 = new Float32Array(FNB); f.sd = new Float32Array(FNB); f.sr = new Float32Array(FNB); near(solidG, f.x, f.y, f.r + 1, o => { if (o.t === 'tree' || o.t === 'rock' && o.r >= 0.45 || o.t === 'prop' && !o.low) occlude(f.sd0, f.sr0, f.x, f.y, o.x, o.y, o.r, f.r + 1); }); }
@@ -1202,7 +1203,7 @@ const ITEM_CARD = {
   candy: () => ({ act: 'Pick up the candy bar', title: 'A candy bar', lines: ['Still sealed, by the torn tent.', P.hp < HPMAX ? 'You eat it. Your hands stop shaking.' : 'You pocket it for later.'] }),
 };
 const pickEl = $('pick'), readEl = $('read'), readCv = $('readCv');
-let pickIt = null, readIt = null;
+let pickIt = null, readIt = null, readAt = 0, readTO = 0;
 function updateItems() {
   let best = null, bd = 1e9;
   for (const it of ITEMS) { if (it.taken) continue; const d = Math.hypot(P.x - it.x, P.y - it.y); if (d < it.r && d < bd) { bd = d; best = it; } }
@@ -1220,11 +1221,15 @@ function openItem(it) {
   const c = ITEM_CARD[it.k]();
   if (it.k === 'candy') { if (P.hp < HPMAX) { P.items.candy = 2; heal(0.3); } else P.items.candy = 1; }
   mode = 'read'; dropSticks(); P.vx = P.vy = 0; P.mode = 'still'; P.moving = false; hud(false); snd.click(true);
-  drawCloseup(it.k); $('readT').textContent = c.title; $('readP').innerHTML = c.lines.map(l => `<p>${l.replace(/</g, '&lt;')}</p>`).join('');
-  readEl.hidden = false;
+  drawCloseup(it.k); $('readT').textContent = c.title;
+  const onPage = it.k === 'page1' || it.k === 'page2' || it.k === 'notebook'; // the writing is on the page itself: no readout
+  $('readP').innerHTML = onPage ? '' : c.lines.map(l => `<p>${l.replace(/</g, '&lt;')}</p>`).join('');
+  const cw = Math.min(VW() * 0.94, (VH() - (onPage ? 84 : 118)) * 16 / 9); readCv.style.width = cw + 'px'; // as big as the screen allows
+  readEl.classList.remove('on'); readEl.hidden = false; readAt = performance.now();
+  clearTimeout(readTO); readTO = setTimeout(() => readEl.classList.add('on'), 900); // the picture first, alone; the caption after a beat
 }
 function closeRead() {
-  if (mode !== 'read') return;
+  if (mode !== 'read' || performance.now() - readAt < 700) return; // a stray tap can't dismiss it before you've looked
   readEl.hidden = true; mode = 'play'; hud(true); snd.click(false);
   if (readIt && readIt.den && !S.struck) S.denArmAt = runTime + 1.3; // you look up from it... and it's behind you
   readIt = null;
@@ -1232,38 +1237,75 @@ function closeRead() {
 pickEl.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); initAudio(); openItem(pickIt); });
 readEl.addEventListener('pointerdown', e => { e.stopPropagation(); closeRead(); });
 // the close-up: a little picture of the thing in your flashlight
+// (Noah v11) the close-up is the point: a big picture of the thing in your light, its own writing readable on it.
+// Drawn at 320x180 so a journal page carries real handwriting; the caption comes in after a beat, and stays short.
+const CUW = 320, CUH = 180;
+let handCv = null;
 function drawCloseup(k) {
-  const w = 128, h = 72, cx = readCv.getContext('2d'), im = cx.createImageData(w, h), d = new Uint32Array(im.data.buffer);
-  const col = (r, g, b) => (0xff000000 | b << 16 | g << 8 | r) >>> 0;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { // forest floor in a pool of light
-    const q = Math.hypot((x - 64) / 64, (y - 36) / 40), L = clamp(1.15 - q, 0, 1) ** 1.3, n = hash2(x * 3, y * 5), nd = n > 0.86 ? 1.5 : n > 0.6 ? 1.15 : 0.9;
-    const bay = ((x & 1) * 2 + (y & 1) * 3) % 4 / 4 * 0.08; d[y * w + x] = col((60 * L * nd + bay * 30) | 0, (48 * L * nd) | 0, (34 * L * nd) | 0);
+  const w = CUW, h = CUH, cx = readCv.getContext('2d'), im = cx.createImageData(w, h), d = new Uint32Array(im.data.buffer);
+  const col = (r, g, b) => (0xff000000 | clamp(b | 0, 0, 255) << 16 | clamp(g | 0, 0, 255) << 8 | clamp(r | 0, 0, 255)) >>> 0;
+  const lit = (x, y) => clamp(1.3 - Math.hypot((x - 160) / 170, (y - 92) / 110), 0.18, 1);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { // forest floor in a pool of light: soil, needles, a few leaves
+    const L = clamp(1.12 - Math.hypot((x - 160) / 165, (y - 92) / 105), 0, 1) ** 1.4, n = hash2(x * 3, y * 5), nd = n > 0.9 ? 1.45 : n > 0.62 ? 1.12 : 0.88;
+    d[y * w + x] = col(58 * L * nd, 46 * L * nd, 33 * L * nd);
   }
-  const lit = (x, y) => clamp(1.25 - Math.hypot((x - 64) / 64, (y - 36) / 40), 0.25, 1);
-  const px = (x, y, r, g, b) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= w || y >= h) return; const L = lit(x, y); d[y * w + x] = col(r * L | 0, g * L | 0, b * L | 0); };
-  const ring = (cx0, cy0, rx, ry, r, g, b) => { for (let a = 0; a < 200; a++) { const t = a / 200 * TAU; px(cx0 + Math.cos(t) * rx, cy0 + Math.sin(t) * ry, r, g, b); px(cx0 + Math.cos(t) * (rx - 0.6), cy0 + Math.sin(t) * (ry - 0.6), r * 0.8, g * 0.8, b * 0.8); } };
-  const lineP = (x0, y0, x1, y1, r, g, b) => { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5); for (let i = 0; i <= n; i++) px(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, r, g, b); };
-  const scribble = (x0, y0, x1, rows, gap, seed) => { for (let r = 0; r < rows; r++) { let x = x0 + (r === 0 ? 4 : 0); const y = y0 + r * gap, end = x1 - hash2(r, seed) * 14; while (x < end) { const wl = 3 + (hash2(x, r + seed) * 6 | 0); for (let i = 0; i < wl; i++) px(x + i, y + (hash2(x + i, r * 7 + seed) > 0.6 ? -1 : 0), 52, 44, 60); x += wl + 2; } } };
+  const get = (x, y) => d[(y | 0) * w + (x | 0)];
+  const px = (x, y, r, g, b) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= w || y >= h) return; const L = lit(x, y); d[y * w + x] = col(r * L, g * L, b * L); };
+  const dark = (x, y, k2) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= w || y >= h) return; const c = d[y * w + x]; d[y * w + x] = col((c & 255) * k2, (c >> 8 & 255) * k2, (c >> 16 & 255) * k2); };
+  const lineP = (x0, y0, x1, y1, r, g, b, t = 1) => { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5); for (let i = 0; i <= n; i++) for (let j = 0; j < t; j++) px(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n + j, r, g, b); };
+  for (let i = 0; i < 70; i++) { const x0 = hash2(i, 11) * w, y0 = hash2(i, 12) * h, a = hash2(i, 13) * TAU, L = 6 + hash2(i, 14) * 9, v = 0.55 + hash2(i, 15) * 0.5; // pine needles
+    for (let t = 0; t < L; t++) { const x = x0 + Math.cos(a) * t, y = y0 + Math.sin(a) * t; if (x >= 0 && y >= 0 && x < w && y < h) px(x, y, 92 * v, 70 * v, 40 * v); } }
+  // handwriting: a real font rendered small, thresholded to ink pixels, every word a little off the line
+  const hand = (text, x0, y0, wMax, lh, o = {}) => {
+    if (!handCv) handCv = document.createElement('canvas'); handCv.width = w; handCv.height = h;
+    const g = handCv.getContext('2d'); g.clearRect(0, 0, w, h); g.fillStyle = '#000'; g.font = o.font || 'italic 600 10px Georgia, "Times New Roman", serif'; g.textBaseline = 'alphabetic';
+    let x = x0, y = y0, ln = 0; const sp = g.measureText(' ').width;
+    for (const word of text.split(' ')) {
+      const ww = g.measureText(word).width; if (x > x0 && x + ww > x0 + wMax) { x = x0 + (o.indent ? hash2(ln, 5) * 4 : 0); y += lh; ln++; }
+      const wob = Math.round((hash2(x | 0, y + (o.seed || 0)) - 0.5) * (o.mess || 1.2)), sl = (o.slope || 0) * (x - x0);
+      g.fillText(word, x, y + wob + sl); x += ww + sp * (o.spread || 1);
+    }
+    const a = g.getImageData(0, 0, w, h).data, ink = o.ink || [34, 36, 64];
+    for (let i = 0; i < w * h; i++) if (a[i * 4 + 3] > (o.th || 96)) px(i % w, i / w | 0, ...ink);
+    return y;
+  };
+  const paper = (x0, y0, x1, y1, seed, tornTop, tornRight) => {
+    for (let y = y0 + 3; y < y1 + 4; y++) for (let x = x0 + 4; x < x1 + 5; x++) dark(x, y, 0.45); // shadow on the ground
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      if (tornTop && y < y0 + 2 + hash2(x >> 1, seed) * 5) continue; if (tornRight && x > x1 - 3 - hash2(y >> 1, seed + 1) * 7) continue;
+      const v = 214 - hash2(x * 2, y * 3 + seed) * 14 - (hash2(x >> 3, (y >> 3) + seed) > 0.8 ? 8 : 0); px(x, y, v, v * 0.95, v * 0.8); // faint blotches where the rain got it
+    }
+  };
   if (k === 'glasses') {
-    for (const sg of [-1, 1]) { const ox = 64 + sg * 17;
-      for (let y = -12; y <= 12; y++) for (let x = -14; x <= 14; x++) if ((x / 14) ** 2 + (y / 12) ** 2 < 0.9) { const i = ((36 + y) | 0) * w + ((ox + x) | 0); const c = d[i]; d[i] = (c & 0xff000000) | ((((c >> 16 & 255) * 0.8 + 18) | 0) << 16) | ((((c >> 8 & 255) * 0.8 + 16) | 0) << 8) | (((c & 255) * 0.8 + 14) | 0); }
-      ring(ox, 36, 14, 12, 190, 190, 196); px(ox - 7, 30, 250, 250, 255); px(ox - 6, 29, 220, 220, 230); }
-    lineP(57, 33, 71, 33, 190, 190, 196); lineP(47, 34, 31, 26, 160, 160, 168); lineP(97, 34, 113, 27, 160, 160, 168);
-    lineP(70, 30, 92, 41, 235, 235, 240); lineP(80, 35, 78, 45, 210, 210, 220); lineP(84, 37, 90, 29, 210, 210, 220); // the crack
+    for (const sg of [-1, 1]) { const ox = 160 + sg * 40; for (let y = -26; y <= 30; y++) for (let x = -34; x <= 34; x++) if ((x / 33) ** 2 + ((y - 4) / 26) ** 2 < 1) dark(ox + x + 3, 96 + y, 0.6); } // shadow
+    for (const sg of [-1, 1]) { const ox = 160 + sg * 40, oy = 92;
+      for (let y = -26; y <= 26; y++) for (let x = -33; x <= 33; x++) if ((x / 31) ** 2 + (y / 24) ** 2 < 1) { const c = get(ox + x, oy + y); d[((oy + y) | 0) * w + ((ox + x) | 0)] = col((c & 255) * 0.9 + 22, (c >> 8 & 255) * 0.9 + 22, (c >> 16 & 255) * 0.9 + 26); }
+      for (let a = 0; a < 600; a++) { const t = a / 600 * TAU, c = Math.cos(t), s2_ = Math.sin(t), v = s2_ < -0.3 ? 1.15 : 0.8; for (const rr of [0, 1, 2]) px(ox + c * (33 - rr), oy + s2_ * (26 - rr), (rr === 1 ? 210 : 150) * v, (rr === 1 ? 205 : 148) * v, (rr === 1 ? 196 : 140) * v); }
+      lineP(ox - 18, oy - 16, ox - 10, oy - 20, 255, 255, 250, 1); }
+    for (let x = 150; x <= 170; x++) { const yb = 82 - Math.round(5 * Math.sin((x - 150) / 20 * Math.PI)); px(x, yb, 210, 206, 196); px(x, yb + 1, 150, 146, 138); } // the bridge, arched between the lenses
+    lineP(87, 86, 50, 62, 170, 166, 158, 2); lineP(50, 62, 42, 66, 170, 166, 158, 2); lineP(233, 86, 272, 70, 170, 166, 158, 2); lineP(272, 70, 282, 76, 170, 166, 158, 2); // the arms, one bent
+    const ix = 208, iy = 98; for (const [dx, dy] of [[-40, -26], [-10, -36], [26, -30], [36, 6], [12, 30], [-30, 22], [-44, 4]]) lineP(ix, iy, ix + dx * 0.62, iy + dy * 0.55, 240, 240, 236); // the crack, from where it hit
+    for (let a = 0; a < 80; a++) { const t = a / 80 * TAU; px(ix + Math.cos(t) * 5, iy + Math.sin(t) * 4, 220, 220, 214); }
   } else if (k === 'page1' || k === 'page2') {
-    const seed = k === 'page1' ? 3 : 9;
-    for (let y = 10; y < 64; y++) for (let x = 30; x < 98; x++) { const tear = x > 92 + hash2(y, seed) * 6 || y < 11 + hash2(x, seed) * 3; if (tear) continue; const v = 206 - (hash2(x * 2, y * 3 + seed) * 18 | 0); px(x, y, v, v * 0.95, v * 0.8); }
-    for (let r = 0; r < 9; r++) lineP(32, 19 + r * 5, 92, 19 + r * 5, 150, 160, 175);
-    scribble(36, 17, 90, 9, 5, seed);
+    const seed = k === 'page1' ? 3 : 9; paper(70, 8, 252, 172, seed, true, true);
+    for (let y = 24; y < 168; y += 11) lineP(72, y, 244, y, 156, 168, 190); lineP(88, 10, 88, 170, 196, 120, 120); // ruled, with a margin
+    const c = ITEM_CARD[k](); hand(c.lines.map(l => l.replace(/^"|"$/g, '')).join('  '), 92, 34, 138, 11, { seed });
   } else if (k === 'notebook') {
-    for (let y = 8; y < 66; y++) for (let x = 20; x < 108; x++) { const edge = y < 10 || y > 63 || x < 22 || x > 105; px(x, y, ...(edge ? [40, 58, 80] : [212, 204, 182])); }
-    lineP(64, 9, 64, 64, 120, 110, 92);
-    for (let r = 0; r < 9; r++) { lineP(26, 16 + r * 5, 61, 16 + r * 5, 160, 168, 180); lineP(67, 16 + r * 5, 102, 16 + r * 5, 160, 168, 180); }
-    scribble(28, 14, 60, 9, 5, 4); scribble(69, 14, 101, 6, 5, 7);
-    for (let i = 0; i < 26; i++) px(70 + i, 46 + (hash2(i, 2) * 3 | 0) + (i > 13 ? 2 : 0), 52, 44, 60); // the rushed last line runs off downhill
-  } else if (k === 'candy') {
-    for (let y = 26; y < 46; y++) for (let x = 30; x < 98; x++) { const end = x < 38 || x > 89, crimp = end && (x & 1); const band = x > 52 && x < 76 && !end; const sh = y < 29 ? 1.25 : y > 42 ? 0.75 : 1; const c = crimp ? [150, 40, 30] : band ? [220, 204, 160] : [178, 52, 38]; px(x, y, c[0] * sh, c[1] * sh, c[2] * sh); }
-    for (let x = 56; x < 72; x += 2) px(x, 36, 120, 40, 30);
+    for (let y = 14; y < 172; y++) for (let x = 24; x < 300; x++) dark(x, y, 0.45);
+    for (let y = 8; y < 168; y++) for (let x = 18; x < 296; x++) { const edge = y < 12 || y > 163 || x < 22 || x > 291; if (edge) px(x, y, 36, 52, 74); }
+    for (let y = 12; y < 164; y++) for (let x = 22; x < 292; x++) { const v = 214 - hash2(x * 2, y * 3) * 12 - (Math.abs(x - 157) < 8 ? (8 - Math.abs(x - 157)) * 5 : 0); px(x, y, v, v * 0.95, v * 0.82); }
+    lineP(157, 12, 157, 164, 120, 108, 88); for (let y = 30; y < 162; y += 11) { lineP(28, y, 151, y, 160, 170, 190); lineP(163, y, 286, y, 160, 170, 190); }
+    hand('D. Marsh', 30, 26, 120, 11, { font: 'italic 700 11px Georgia, serif', seed: 1 });
+    hand('Thurs. Something keeps pace with me off the trail. It stops when I stop. I put the light on it and it went. It always comes back closer.', 30, 41, 120, 11, { seed: 2 });
+    hand('Fri. Dropped my glasses. Can\'t find the trail. Keep the light on. Keep moving. Find a fire.', 166, 30, 118, 13, { seed: 4, mess: 2, slope: 0.05, font: 'italic 600 11px Georgia, serif', spread: 1.4 }); // rushed: bigger, running downhill
+  } else if (k === 'candy') { // (kept for later) a chocolate bar, wrapper torn back on one end so you can see what it is
+    for (let y = 70; y < 120; y++) for (let x = 64; x < 262; x++) dark(x + 5, y + 6, 0.5);
+    for (let y = 70; y < 116; y++) for (let x = 60; x < 258; x++) { const sh = y < 75 ? 1.2 : y > 110 ? 0.72 : 1, crimp = x > 246 && (x & 2);
+      if (x < 120) { const seg = ((x - 62) % 19 < 2) || ((y - 72) % 22 < 2); const cc = seg ? [62, 34, 20] : [104, 60, 36]; px(x, y, cc[0] * sh, cc[1] * sh, cc[2] * sh); continue; } // squares of chocolate
+      if (x < 128) { const fz = hash2(x, y) > 0.5; px(x, y, (fz ? 205 : 160) * sh, (fz ? 205 : 160) * sh, (fz ? 210 : 168) * sh); continue; } // torn foil
+      const c = crimp ? [130, 30, 26] : [176, 40, 32]; px(x, y, c[0] * sh, c[1] * sh, c[2] * sh); }
+    for (let y = 80; y < 106; y++) for (let x = 148; x < 236; x++) px(x, y, 226, 196, 120);
+    hand('COCOA', 160, 100, 80, 11, { font: '700 17px Georgia, serif', ink: [110, 40, 22], mess: 0, th: 110 });
   }
   cx.putImageData(im, 0, 0);
 }
