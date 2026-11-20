@@ -1819,13 +1819,14 @@ function crAnim() {
   const U = CR.dist || 0;
   if (CR.st === 'lunge') {
     // (Noah v12) hungry, not tiptoeing: the long heavy run (1.9 m strides, low hips), pitched far forward, head out at you,
-    // and the arms pedal like a bicycle, out of phase: reach high and forward with the claws open, rake down, pull back, come over again
+    // arms reaching out in front at chest height, each turning a small tight circle out of phase, claws grasping
     CR.anim = 'lunge'; const G = U / 1.9, r = runPose2(G, 0);
     Object.assign(r, { sh: [1.5, 0.78], shW: 0.36, hd: [0, 1.34, 1.08], tilt: 0, jaw: 0.06, ehR: 1, ehL: 1, eR: null, eL: null, uf: 0.08 });
     r.hp = [r.hp[0] - 0.04, 0.1];
     for (const sd of [1, -1]) {
-      const th = Math.PI * G + (sd > 0 ? 0 : Math.PI) + 0.4, y = 1.38 - 0.34 * Math.sin(th), z = 1.36 + 0.38 * Math.cos(th), open = 0.5 + 0.5 * Math.cos(th + Math.PI / 4);
-      r[sd > 0 ? 'wR' : 'wL'] = [sd * (0.4 - 0.08 * Math.cos(th)), y, z]; r[sd > 0 ? 'cR' : 'cL'] = 0.25 + 1.0 * open;
+      // (Noah v12e) chest height, held out in front; small tight circles, unsteady because the body is running under them
+      const th = Math.PI * G + (sd > 0 ? 0 : Math.PI) + 0.4, y = 1.46 - 0.07 * Math.sin(th), z = 1.62 + 0.09 * Math.cos(th), open = 0.5 + 0.5 * Math.cos(th + Math.PI / 4);
+      r[sd > 0 ? 'wR' : 'wL'] = [sd * (0.34 - 0.03 * Math.cos(th)), y, z]; r[sd > 0 ? 'cR' : 'cL'] = 0.45 + 0.8 * open;
     }
     return [r, 2];
   }
