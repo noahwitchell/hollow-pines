@@ -1700,6 +1700,21 @@ function leanIdle(fc) {
   p.jaw = dB > 0.75 ? 0.05 : 0; // jaw cracks at the bottom of the hunch
   return CR.ic.sd > 0 ? p : mirPose(p);
 }
+// (Noah v11) the lurk idle is never still either: low and watchful, a slow 4 s loop. The upper body sways, the head
+// scans side to side a beat behind it and dips as it listens, the hanging claws swing like weights and flex.
+const LURK_LOOP = 120;
+function lurkIdle(fc) {
+  if (CR.lc == null) CR.lc = { ph: R(), sd: R() < 0.5 ? 1 : -1 };
+  const th = (fc / LURK_LOOP + CR.lc.ph) * Math.PI * 2, p = copyPose(CPOSE.stoop), sw = Math.sin(th), lag = Math.sin(th - 0.9);
+  p.ux = 0.07 * sw;
+  p.sh = [p.sh[0] + 0.04 * Math.sin(th * 2), p.sh[1] + 0.03 * Math.cos(th * 2)];
+  p.hd = [p.hd[0] + 0.14 * lag, p.hd[1] - 0.06 * (0.5 - 0.5 * Math.cos(th * 2 - 0.9)), p.hd[2] + 0.04 * Math.cos(th - 0.9)];
+  p.tilt = 9 * lag;
+  p.wR = [p.wR[0] + 0.04 * sw, p.wR[1] + 0.07 * Math.sin(th + 1.2), p.wR[2] + 0.08 * Math.cos(th + 0.3)];
+  p.wL = [p.wL[0] + 0.04 * sw, p.wL[1] + 0.07 * Math.sin(th + 3.4), p.wL[2] + 0.08 * Math.cos(th + 2.5)];
+  p.cR = 0.75 + 0.3 * Math.sin(th * 2 + 0.5); p.cL = 0.75 + 0.3 * Math.sin(th * 2 + 2.2);
+  return CR.lc.sd > 0 ? p : mirPose(p);
+}
 // which way its light side is: +1 = the beam is on its right
 function lightSide() { const dx = P.x - CR.x, dy = P.y - CR.y; return (dx * -Math.sin(CR.a) + dy * Math.cos(CR.a)) >= 0 ? 1 : -1; }
 // chooses what it's doing and samples the pose. Returns [pose, framesPerDrawing]
@@ -1710,13 +1725,14 @@ function crAnim() {
   if (CR.st === 'strike' && S.stk) {
     const k = S.stk;
     if (k.ph !== 1) { CR.anim = 'tower'; const p = copyPose(CPOSE.tower); if ((fc % 96) >= 20 && (fc % 96) < 62) { p.sh = [p.sh[0] + 0.1, p.sh[1]]; p.hd = [p.hd[0], p.hd[1] + 0.1, p.hd[2]]; } return [p, 3]; }
+    const OJ = (p) => window.HP_OPENJAW ? Object.assign(copyPose(p), { jaw: Math.max(p.jaw || 0, 0.24) }) : p; // test: mouth open the whole attack
     const F = Math.floor(k.t * 30); CR.anim = 'reveal';
     if (F <= 0) CR.eyeK = 0.45; // a slit, then the eyes are open
-    if (F < 6) return [CPOSE.tower, 1];
-    if (F < 8) return [CPOSE.tower2, 1];
-    if (F < 10) return [CPOSE.antic, 1];
+    if (F < 6) return [OJ(CPOSE.tower), 1];
+    if (F < 8) return [OJ(CPOSE.tower2), 1];
+    if (F < 10) return [OJ(CPOSE.antic), 1];
     if (F === 10) { CR.smear = true; shake = Math.max(shake, 0.45); }
-    CR.freeze = true; return [CPOSE.strike, 1];
+    CR.freeze = true; return [OJ(CPOSE.strike), 1];
   }
   if (CR.exitF > 0 && CR.pose) { CR.anim = 'exit'; const p = copyPose(CR.pose); p.hp = [p.hp[0] - 0.1, p.hp[1]]; return [p, 1]; }
   const U = CR.dist || 0;
@@ -1747,7 +1763,7 @@ function crAnim() {
   // idle: breathing in 1 px steps, the arms hang still, and now and then a twitch
   CR.anim = 'idle';
   const stoop = !!STOOP[CR.st];
-  let p = stoop ? copyPose(CPOSE.stoop) : leanIdle(fc);
+  let p = stoop ? lurkIdle(fc) : leanIdle(fc);
   if (CR.twNext == null) CR.twNext = fc + 75 + R() * 105;
   if (!CR.tw && fc > CR.twNext && stoop) {
     const r = R(), toP = lightSide();
@@ -1762,9 +1778,7 @@ function crAnim() {
     else if (tw.k === 'listen') { if (t > 30) CR.tw = null; else { p.hd = [p.hd[0] + tw.toP * 0.08, p.hd[1], p.hd[2]]; if (t > 6 && t < 18) CR.eyeK = 0.45; } }
     if (!CR.tw) CR.twNext = fc + 75 + R() * 105;
   }
-  if (!stoop) return [p, 2]; // the lean loop carries its own breath
-  if ((fc % 96) >= 20 && (fc % 96) < 62) { p.sh = [p.sh[0] + 0.1, p.sh[1]]; p.hd = [p.hd[0], p.hd[1] + 0.1, p.hd[2]]; if (CR.eyeK === 1) CR.eyeK = 1.25; } // inhale: chest and head up a pixel, eyes a shade brighter
-  return [p, 3];
+  return [p, 2]; // both idle loops carry their own breath
 }
 // body-space joints for a pose
 const ELB_MAX = 1.14; // pull the hand in so the elbow always shows a bend
@@ -1843,10 +1857,15 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
   fillPoly(box(-0.16, 0.16, -0.16 - jd, -0.04, 0.05, 0.3), H0);
   if (!shadow && !o.away) {
     if (jd >= 0.1) { fillPoly([HQ(-0.13, -0.05, 0.31), HQ(0.13, -0.05, 0.31), HQ(0.1, -0.05 - jd, 0.31), HQ(-0.1, -0.05 - jd, 0.31)], PAL.mouth); const a = HQ(-0.11, -0.05, 0.32), b = HQ(0.11, -0.05, 0.32), lo = HQ(0, -0.05 - jd, 0.32);
-      // (Noah v11) open mouth: a midtone upper row, two bright fangs hanging into the dark, short points up from the lower jaw
-      const cx = Math.floor((a[0] + b[0]) / 2), ty = Math.floor((a[1] + b[1]) / 2), hw = Math.max(1, Math.round(Math.abs(b[0] - a[0]) / 2)), by = Math.max(ty + 2, Math.floor(lo[1]));
-      for (let dx = -hw; dx <= hw; dx++) { const x = cx + dx + 0.5; line(x, ty + 0.5, x, ty + 0.5, PAL.toothDk); if (dx % 2 === 0 && Math.abs(dx) !== 1) line(x, by + 0.5, x, by + 0.5, PAL.toothDk); }
-      for (const dx of hw >= 2 ? [-1, 1] : [0]) { const x = cx + dx + 0.5; line(x, ty + 0.5, x, Math.min(ty + 2, by - 1) + 0.5, PAL.tooth[0]); } }
+      // (Noah v11) open mouth: the upper teeth exactly as when closed (midtone row, two short bright fangs), a dark gap
+      // where the jaw has dropped, and a small U of lower teeth at the bottom of the open jaw
+      const cx = Math.floor((a[0] + b[0]) / 2), ty = Math.floor((a[1] + b[1]) / 2), hw = o.profile ? 1 : 2, by = Math.max(ty + (hw >= 2 ? 4 : 3), Math.floor(lo[1]));
+      const px = (dx, y, col) => line(cx + dx + 0.5, y + 0.5, cx + dx + 0.5, y + 0.5, col);
+      for (let y = ty; y <= by; y++) for (let dx = -hw; dx <= hw; dx++) px(dx, y, PAL.mouth);
+      for (let dx = -hw; dx <= hw; dx++) px(dx, ty, PAL.toothDk);
+      for (const dx of hw >= 1 ? [-1, 1] : [0]) { px(dx, ty, PAL.tooth[0]); px(dx, ty + 1, PAL.tooth[0]); }
+      for (let dx = -hw + 1; dx <= hw - 1; dx++) px(dx, by, PAL.toothDk);
+      for (const dx of [-hw, hw]) { if (hw >= 2) px(dx, by - 1, PAL.tooth[0]); px(dx, by, PAL.toothDk); } }
     else {
       if (o.profile) { const c = HQ(nearSide * 0.15, -0.14, 0.12), d = HQ(nearSide * 0.15, -0.14, 0.29), fg = HQ(nearSide * 0.15, -0.17, 0.28); line(c[0], c[1], d[0], d[1], PAL.tooth[0]); if (fg[0] >= 0 && fg[1] >= 0 && fg[0] < W && fg[1] < H) put((fg[1] | 0) * W + (fg[0] | 0), PAL.tooth[0]); }
     }
