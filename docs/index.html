@@ -1926,9 +1926,9 @@ function runPose2(U, ls) {
   const cs = ls ? -ls : -1, f2 = UR * 12; // the crutch arm, and where we are in its two-step cycle
   let W, wm;
   if (f2 < 6) { W = [cs * 0.38, 0.2, 0.95 - f2 * 1.9 / 12]; wm = 2; p.shT = -cs * 0.1; } // planted: pinned to the ground as the body passes
-  else if (f2 < 10) { W = lv3([cs * 0.38, 0.25, 0.15], [cs * 0.4, 0.7, 0.2], sstep(6, 10, f2)); wm = 0; } // released, claws trailing
-  else if (f2 < 20) { W = [cs * 0.4, 0.7, 0.2]; wm = 0; }
-  else { W = lv3([cs * 0.4, 0.7, 0.2], [cs * 0.38, 0.5, 0.95], sstep(20, 24, f2)); wm = 1; } // swinging out to plant
+  else if (f2 < 10) { W = lv3([cs * 0.38, 0.25, 0.15], [cs * 0.6, 0.72, 0.42], sstep(6, 10, f2)); wm = 0; } // released, claws trailing
+  else if (f2 < 20) { W = [cs * 0.6, 0.72, 0.42]; wm = 0; } // (Noah v12) held out at its side, not behind its back where it vanished head-on
+  else { W = lv3([cs * 0.6, 0.72, 0.42], [cs * 0.38, 0.5, 0.95], sstep(20, 24, f2)); wm = 1; } // swinging out to plant
   if (cs > 0) { p.wR = W; p.eR = null; p.wmR = wm; p.cR = 1; } else { p.wL = W; p.eL = null; p.wmL = wm; p.cL = 1; }
   const os = -cs;
   if (ls) { const E = [os * 0.46, 1.6, 0.66], Wr = [os * 0.16, 1.66, 1.02]; if (os > 0) { p.eR = E; p.wR = Wr; p.wmR = 3; } else { p.eL = E; p.wL = Wr; p.wmL = 3; } p.wb = 35; } // shielding: (Noah v12) the forearm held across the brow, in FRONT of the head (it was hidden behind it), eyes showing under it
@@ -2131,7 +2131,11 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
     for (const [m, t] of L.claws) { ln(L.W, m, 0, col, q); ln(m, t, 0, PAL.claw, q); }
   };
   const far = -nearSide;
-  leg(far, shadow ? H0 : H1); if (!shadow) arm(far, H1); // the far side a shade lighter, so you can follow which leg plants
+  // (Noah v12) draw order follows depth: an arm reaching out in front of the chest goes over the torso, a forearm held up
+  // across the face goes over the head (both were being painted over: the run looked one-armed). Turned away, they stay behind.
+  const JL = s => J[s > 0 ? 'R' : 'L'], atFace = s => !o.away && JL(s).W[1] > J.hd[1] - 0.2 && JL(s).W[2] > J.hd[2] - 0.05, inFront = s => !o.away && JL(s).W[2] - JL(s).Sh[2] > 0.25;
+  const farLate = !shadow && (atFace(far) ? 2 : inFront(far) ? 1 : 0), nearLate = !shadow && atFace(nearSide) ? 2 : 0;
+  leg(far, shadow ? H0 : H1); if (!shadow && !farLate) arm(far, H1); // the far side a shade lighter, so you can follow which leg plants
   const R_ = J.R, L_ = J.L;
   // torso: a solid volume (hull of front and side sections): broad chest with depth, belly, a hunch behind the shoulders, narrow hips
   { const ux0 = J.p.ux, tp = [];
@@ -2146,7 +2150,8 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
     fillPoly(hull2(tp.map(Q)), H0);
   }
   if (Math.abs(R_.K[2] - L_.K[2]) < 0.3) fillPoly([R_.Hp, R_.K, L_.K, L_.Hp].map(p => [p[0] * 0.7, Math.max(0.5, p[1]), p[2]]).map(Q), H0); // fill the crotch down to the knees
-  leg(nearSide, H0); if (!shadow) arm(nearSide, H0);
+  if (farLate === 1) arm(far, H1);
+  leg(nearSide, H0); if (!shadow && !nearLate) arm(nearSide, H0);
   // head sunk between the shoulders: small skull, a jaw wider than it, tilted as one
   const hd = J.hd, tr = J.p.tilt * Math.PI / 180, ct = Math.cos(tr), st = Math.sin(tr), A0 = Q(hd), R0 = Qr(hd);
   const HQ = (x, h, f = 0) => { const r = Qr([hd[0] + x * ct + h * st, hd[1] - x * st + h * ct, hd[2] + f]); return [Math.floor(A0[0] + trem + r[0] - R0[0]) + 0.5, Math.floor(A0[1] + r[1] - R0[1]) + 0.5]; };
@@ -2171,6 +2176,7 @@ function crDraw(Q, Qr, J, ant, ka, nearSide, o = {}) {
       if (o.profile) { const c = HQ(nearSide * 0.15, -0.14, 0.12), d = HQ(nearSide * 0.15, -0.14, 0.29), fg = HQ(nearSide * 0.15, -0.17, 0.28); line(c[0], c[1], d[0], d[1], PAL.tooth[0]); if (fg[0] >= 0 && fg[1] >= 0 && fg[0] < W && fg[1] < H) put((fg[1] | 0) * W + (fg[0] | 0), PAL.tooth[0]); }
     }
   }
+  if (farLate === 2) arm(far, H1); if (nearLate) arm(nearSide, H0); // held up across the face: over the head
   if (!shadow) for (const s of [1, -1]) if (J.p[s > 0 ? 'roR' : 'roL']) hand(s, H0); // at full reach the hand comes over the body
   // antlers: rigid on the skull
   const at = ant.t * Math.PI / 180, ca = Math.cos(at), sa = Math.sin(at);
