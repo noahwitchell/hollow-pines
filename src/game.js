@@ -1814,14 +1814,15 @@ function runPose2(U, ls) {
   p.aR = runFoot(UR, 1); p.aL = runFoot(UL, -1);
   const cs = ls ? -ls : -1, f2 = UR * 12; // the crutch arm, and where we are in its two-step cycle
   let W, wm;
-  if (f2 < 6) { W = [cs * 0.38, 0.2, 0.95 - f2 * 1.9 / 12]; wm = 2; p.shT = -cs * 0.1; } // planted: pinned to the ground as the body passes
+  if (f2 < 6) { W = [cs * 0.5, 0.2, 0.95 - f2 * 1.9 / 12]; wm = 2; p.shT = -cs * 0.1; } // planted: pinned to the ground as the body passes, out to the side
   else if (f2 < 10) { W = lv3([cs * 0.38, 0.25, 0.15], [cs * 0.6, 0.72, 0.42], sstep(6, 10, f2)); wm = 0; } // released, claws trailing
   else if (f2 < 20) { W = [cs * 0.6, 0.72, 0.42]; wm = 0; } // (Noah v12) held out at its side, not behind its back where it vanished head-on
-  else { W = lv3([cs * 0.6, 0.72, 0.42], [cs * 0.38, 0.5, 0.95], sstep(20, 24, f2)); wm = 1; } // swinging out to plant
+  else { W = lv3([cs * 0.6, 0.72, 0.42], [cs * 0.5, 0.5, 0.95], sstep(20, 24, f2)); wm = 1; } // swinging out to plant
   if (cs > 0) { p.wR = W; p.eR = null; p.wmR = wm; p.cR = 1; } else { p.wL = W; p.eL = null; p.wmL = wm; p.cL = 1; }
   const os = -cs;
-  if (ls) { const E = [os * 0.46, 1.6, 0.66], Wr = [os * 0.16, 1.66, 1.02]; if (os > 0) { p.eR = E; p.wR = Wr; p.wmR = 3; } else { p.eL = E; p.wL = Wr; p.wmL = 3; } p.wb = 35; } // shielding: (Noah v12) the forearm held across the brow, in FRONT of the head (it was hidden behind it), eyes showing under it
-  else { const Wr = [os * 0.4, 0.85, 0.3 + 0.3 * Math.cos(Math.PI * U)]; if (os > 0) { p.wR = Wr; p.eR = null; } else { p.wL = Wr; p.eL = null; } }
+  // (Noah v12) no shielding arm on the run: in the dark the silhouette is everything, so the other arm swings too, out wide
+  // of the body, clawing forward and back against the crutch arm's lope, and both always read as arms
+  { const sw = Math.cos(Math.PI * U), Wr = [os * (0.62 - 0.06 * sw), 0.62 + 0.22 * sw, 0.38 + 0.5 * sw]; if (os > 0) { p.wR = Wr; p.eR = null; p.wmR = sw > 0.3 ? 1 : 0; p.cR = 0.6 + 0.5 * Math.max(0, sw); } else { p.wL = Wr; p.eL = null; p.wmL = sw > 0.3 ? 1 : 0; p.cL = 0.6 + 0.5 * Math.max(0, sw); } }
   return p;
 }
 // (notes v5 §5) the flinch: frozen for 3 frames, then a clean recoil, arm thrown up over its eye, body pulled back and
